@@ -1,0 +1,44 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      php-fpm:
+        condition: service_healthy
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  php-fpm:
+    build: .
+    volumes:
+      - .:/var/www/html
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'echo \"ok\";' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  php-cli:
+    build: .
+    volumes:
+      - .:/var/www/html
+    command: ["tail", "-f", "/dev/null"]
+    networks:
+      - app
+
+networks:
+  app:
+    driver: bridge
