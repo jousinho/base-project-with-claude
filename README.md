@@ -1,10 +1,10 @@
-# sf8/postgresql — Symfony 8 + PostgreSQL
+# sf8/postgresql-messenger-sync — Symfony 8 + PostgreSQL + Messenger (sync)
 
-Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, PostgreSQL 16.
+Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, PostgreSQL 16, Symfony Messenger con transport `sync://`.
 Sin código de dominio — punto de partida limpio para añadir tus propios Bounded Contexts.
 
-Para ver un ejemplo completo con dominio User + Product y tests, usa `sf8/postgresql-example`.
-Para la versión con Symfony 7, usa `sf7/postgresql`.
+Para ver un ejemplo completo con dominio User + Product y comunicación inter-BC, usa `sf8/postgresql-messenger-sync-example`.
+Para la versión con Symfony 7, usa `sf7/postgresql-messenger-sync`.
 
 ---
 
@@ -14,10 +14,13 @@ Para la versión con Symfony 7, usa `sf7/postgresql`.
 |---|---|
 | PHP | 8.4 |
 | Symfony | 8.1 |
-| Doctrine ORM | ^3.3 |
-| Doctrine Migrations | ^3.4 |
+| Doctrine ORM | ^3.6 |
+| Doctrine Migrations | ^4.0 |
+| Symfony Messenger | ^8.1 |
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
+
+**Transport Messenger:** `sync://` — los mensajes se procesan en el mismo proceso, sin cola externa.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
@@ -40,37 +43,14 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 ## Arrancar el proyecto por primera vez
 
 ```bash
-# 1. Clona la rama
-git clone -b sf8/postgresql git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/postgresql-messenger-sync git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
-
-# 2. Copia el fichero de variables de entorno
 cp .env.example .env
-
-# 3. Construye las imágenes Docker
 make build
-
-# 4. Arranca los contenedores en segundo plano
 make up
-
-# 5. Instala las dependencias PHP
 make composer cmd=install
-
-# 6. Crea los directorios de cache y logs
-docker compose exec php-cli mkdir -p var/cache var/log && docker compose exec php-cli chmod -R 777 var
-
-# 7. Ejecuta las migraciones (vacías en esta rama, pero el comando debe funcionar)
 make migrate
-
-# 8. Comprueba que todo funciona
 curl http://localhost:8080/health
-# Respuesta esperada: {"status":"ok"}
-```
-
-O en un solo paso:
-
-```bash
-cp .env.example .env && bash scripts/setup.sh
 ```
 
 ---
@@ -78,87 +58,45 @@ cp .env.example .env && bash scripts/setup.sh
 ## Comandos del día a día
 
 ```bash
-make up            # Arranca los contenedores
-make down          # Para y elimina los contenedores
-make build         # Reconstruye las imágenes
-make logs          # Logs en tiempo real
-
-make shell         # Shell en php-fpm
-make cli           # Shell en php-cli
-
-make console cmd=cache:clear          # Ejecuta bin/console
-make composer cmd="require paquete"   # Ejecuta composer
-
-make migrate       # Aplica migraciones pendientes
-make migration     # Genera una nueva migración a partir del diff de entidades
-make db            # Abre psql en la BD principal
-make db-test       # Abre psql en la BD de test
+make up / down / build / logs
+make shell / cli
+make console cmd=cache:clear
+make composer cmd="require paquete"
+make migrate / migration
+make db / db-test
+make test / test-unit / test-integration / test-functional
 ```
 
 ---
 
-## Tests
+## Messenger — cómo usar el bus de eventos
 
-```bash
-make test                # todos los tests
-make test-unit           # suite Unit
-make test-integration    # suite Integration (requiere BD de test)
-make test-functional     # suite Functional (requiere BD de test)
+El bus `event.bus` está disponible como `MessageBusInterface`. Para usarlo en un Application Service:
+
+```php
+use Symfony\Component\Messenger\MessageBusInterface;
+
+final class CreateUserService
+{
+    public function __construct(
+        private UserRepositoryInterface $repository,
+        private MessageBusInterface $eventBus,
+    ) {}
+
+    public function execute(CreateUserCommand $command): UserDTO
+    {
+        // ... crear y guardar user
+        foreach ($user->pullDomainEvents() as $event) {
+            $this->eventBus->dispatch($event);
+        }
+        return UserDTO::fromUser($user);
+    }
+}
 ```
 
-La BD de test (`postgres_test`) está separada de la principal. PHPUnit apunta a ella
-automáticamente mediante la variable `DATABASE_URL` definida en `phpunit.dist.xml`.
+Con `sync://`, el handler se ejecuta inmediatamente en el mismo proceso.
 
-Los tests de integración usan `beginTransaction()` / `rollBack()` — nunca se limpia
-la BD manualmente entre tests.
-
----
-
-## Estructura de carpetas
-
-```
-src/
-├── Kernel.php
-└── Shared/
-    └── Infrastructure/
-        ├── Http/
-        │   └── Controller/
-        │       └── HealthController.php
-        └── Persistence/
-            └── Doctrine/
-                └── Migrations/          ← migraciones generadas aquí
-
-config/
-├── bundles.php
-├── routes.yaml
-├── services.yaml
-└── packages/
-    ├── doctrine.yaml                    ← DBAL + ORM
-    ├── doctrine_migrations.yaml         ← ruta de migraciones
-    ├── framework.yaml
-    └── routing.yaml
-
-tests/
-├── Unit/
-├── Integration/                         ← tests contra BD real
-└── Functional/                          ← tests HTTP end-to-end
-```
-
----
-
-## Añadir un Bounded Context
-
-Esta rama es el punto de partida. Para añadir un BC (`User`, `Product`, etc.):
-
-1. Crea la estructura de carpetas en `src/{BC}/Domain/`, `Application/`, `Infrastructure/`
-2. Define las entidades con XML mappings en `src/{BC}/Infrastructure/Persistence/Doctrine/`
-3. Registra el mapping en `config/packages/doctrine.yaml`
-4. Registra el repositorio y el controller en `config/services.yaml`
-5. Declara las rutas en `config/routes.yaml`
-6. Genera la migración: `make migration`
-7. Aplica la migración: `make migrate`
-
-Ver `sf8/postgresql-example` para un ejemplo completo con User + Product.
+Ver `sf8/postgresql-messenger-sync-example` para la integración completa con User y Product.
 
 ---
 
@@ -169,6 +107,4 @@ Ver `sf8/postgresql-example` para un ejemplo completo con User + Product.
 | `APP_ENV` | `dev` | Entorno de Symfony |
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
-| `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | Conexión a la BD principal |
-
-La BD de test se configura directamente en `phpunit.dist.xml` y apunta a `postgres_test:5432`.
+| `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
