@@ -1,6 +1,6 @@
 {
-    "name": "symfony-base/sf7-postgresql-example",
-    "description": "Symfony 7 + PostgreSQL — dominio User & Product con DDD y tests",
+    "name": "symfony-base/sf7-mysql-example",
+    "description": "Symfony 7 + MySQL — dominio User & Product con DDD y tests",
     "type": "project",
     "license": "MIT",
     "require": {
