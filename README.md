@@ -12,7 +12,7 @@ Para arrancar un proyecto real sin código de ejemplo, parte de `sf8/main`.
 
 | Componente | Versión |
 |---|---|
-| PHP | 8.3 |
+| PHP | 8.4 |
 | Symfony | 8.1 |
 | PHPUnit | 11 |
 
@@ -26,8 +26,8 @@ Para arrancar un proyecto real sin código de ejemplo, parte de `sf8/main`.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
-- `php:8.3-fpm-alpine` — PHP-FPM (sirve las peticiones HTTP)
-- `php:8.3-fpm-alpine` (modo CLI) — para ejecutar comandos, composer y tests
+- `php:8.4-fpm-alpine` — PHP-FPM (sirve las peticiones HTTP)
+- `php:8.4-fpm-alpine` (modo CLI) — para ejecutar comandos, composer y tests
 
 ---
 
