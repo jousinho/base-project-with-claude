@@ -1,4 +1,4 @@
 health:
     path: /health
-    controller: App\Shared\Infrastructure\Http\Controller\HealthController
+    controller: App\Health\Infrastructure\Http\Controller\HealthController
     methods: [GET]
