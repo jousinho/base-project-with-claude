@@ -1,4 +1,17 @@
-health:
-    path: /health
-    controller: App\Shared\Infrastructure\Http\Controller\HealthController
-    methods: [GET]
+shared_controllers:
+    resource:
+        path:      ../src/Shared/Infrastructure/Http/Controller/
+        namespace: App\Shared\Infrastructure\Http\Controller
+    type: attribute
+
+user_controllers:
+    resource:
+        path:      ../src/User/Infrastructure/Http/Controller/
+        namespace: App\User\Infrastructure\Http\Controller
+    type: attribute
+
+product_controllers:
+    resource:
+        path:      ../src/Product/Infrastructure/Http/Controller/
+        namespace: App\Product\Infrastructure\Http\Controller
+    type: attribute

@@ -4,5 +4,36 @@ services:
         autoconfigure: false
         public: false
 
+    # ── Shared ────────────────────────────────────────────────────────────────
     App\Shared\Infrastructure\Http\Controller\HealthController:
+        tags: ['controller.service_arguments']
+
+    # ── User BC — Persistence ─────────────────────────────────────────────────
+    App\User\Domain\Repository\UserRepositoryInterface:
+        alias: App\User\Infrastructure\Persistence\Doctrine\DoctrineUserRepository
+
+    App\User\Infrastructure\Persistence\Doctrine\DoctrineUserRepository: ~
+
+    # ── User BC — Application ─────────────────────────────────────────────────
+    App\User\Application\Service\CreateUserService: ~
+    App\User\Application\Service\GetUserService: ~
+    App\User\Application\Service\ListUsersService: ~
+
+    # ── User BC — HTTP ────────────────────────────────────────────────────────
+    App\User\Infrastructure\Http\Controller\UserController:
+        tags: ['controller.service_arguments']
+
+    # ── Product BC — Persistence ──────────────────────────────────────────────
+    App\Product\Domain\Repository\ProductRepositoryInterface:
+        alias: App\Product\Infrastructure\Persistence\Doctrine\DoctrineProductRepository
+
+    App\Product\Infrastructure\Persistence\Doctrine\DoctrineProductRepository: ~
+
+    # ── Product BC — Application ──────────────────────────────────────────────
+    App\Product\Application\Service\CreateProductService: ~
+    App\Product\Application\Service\GetProductService: ~
+    App\Product\Application\Service\ListProductsService: ~
+
+    # ── Product BC — HTTP ─────────────────────────────────────────────────────
+    App\Product\Infrastructure\Http\Controller\ProductController:
         tags: ['controller.service_arguments']

@@ -16,6 +16,8 @@
     </testsuites>
     <php>
         <env name="APP_ENV" value="test"/>
+        <env name="APP_DEBUG" value="0"/>
+        <env name="KERNEL_CLASS" value="App\Kernel"/>
         <env name="DATABASE_URL" value="postgresql://app:app@postgres_test:5432/app_test?serverVersion=16&amp;charset=utf8"/>
     </php>
     <source>

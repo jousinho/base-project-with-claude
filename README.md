@@ -1,10 +1,10 @@
-# sf8/postgresql — Symfony 8 + PostgreSQL
+# sf8/postgresql-example — Symfony 8 + PostgreSQL + DDD completo
 
-Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, PostgreSQL 16.
-Sin código de dominio — punto de partida limpio para añadir tus propios Bounded Contexts.
+Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal.
+Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para ver un ejemplo completo con dominio User + Product y tests, usa `sf8/postgresql-example`.
-Para la versión con Symfony 7, usa `sf7/postgresql`.
+Para partir de cero sin código de dominio, usa `sf8/postgresql`.
+Para la versión con Symfony 7, usa `sf7/postgresql-example`.
 
 ---
 
@@ -14,8 +14,8 @@ Para la versión con Symfony 7, usa `sf7/postgresql`.
 |---|---|
 | PHP | 8.4 |
 | Symfony | 8.1 |
-| Doctrine ORM | ^3.3 |
-| Doctrine Migrations | ^3.4 |
+| Doctrine ORM | ^3.6 |
+| Doctrine Migrations | ^4.0 |
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
 
@@ -41,30 +41,26 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf8/postgresql git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/postgresql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
-# 2. Copia el fichero de variables de entorno
+# 2. Copia las variables de entorno
 cp .env.example .env
 
-# 3. Construye las imágenes Docker
+# 3. Construye las imágenes y arranca
 make build
-
-# 4. Arranca los contenedores en segundo plano
 make up
 
-# 5. Instala las dependencias PHP
+# 4. Instala las dependencias
 make composer cmd=install
 
-# 6. Crea los directorios de cache y logs
-docker compose exec php-cli mkdir -p var/cache var/log && docker compose exec php-cli chmod -R 777 var
-
-# 7. Ejecuta las migraciones (vacías en esta rama, pero el comando debe funcionar)
+# 5. Aplica las migraciones (crea las tablas users y products)
 make migrate
 
-# 8. Comprueba que todo funciona
+# 6. Comprueba que funciona
 curl http://localhost:8080/health
-# Respuesta esperada: {"status":"ok"}
+curl http://localhost:8080/api/users
+curl http://localhost:8080/api/products
 ```
 
 O en un solo paso:
@@ -80,19 +76,19 @@ cp .env.example .env && bash scripts/setup.sh
 ```bash
 make up            # Arranca los contenedores
 make down          # Para y elimina los contenedores
-make build         # Reconstruye las imágenes
+make build         # Reconstruye las imágenes (necesario al cambiar Dockerfile)
 make logs          # Logs en tiempo real
 
 make shell         # Shell en php-fpm
 make cli           # Shell en php-cli
 
-make console cmd=cache:clear          # Ejecuta bin/console
-make composer cmd="require paquete"   # Ejecuta composer
+make console cmd=cache:clear        # Ejecuta bin/console
+make composer cmd="require paquete" # Ejecuta composer
 
 make migrate       # Aplica migraciones pendientes
-make migration     # Genera una nueva migración a partir del diff de entidades
-make db            # Abre psql en la BD principal
-make db-test       # Abre psql en la BD de test
+make migration     # Genera migración a partir del diff de entidades
+make db            # psql en la BD principal
+make db-test       # psql en la BD de test
 ```
 
 ---
@@ -100,17 +96,39 @@ make db-test       # Abre psql en la BD de test
 ## Tests
 
 ```bash
-make test                # todos los tests
-make test-unit           # suite Unit
-make test-integration    # suite Integration (requiere BD de test)
-make test-functional     # suite Functional (requiere BD de test)
+make test                # los tres niveles
+make test-unit           # solo Unit (sin BD)
+make test-integration    # solo Integration (BD de test)
+make test-functional     # solo Functional (BD de test)
 ```
 
-La BD de test (`postgres_test`) está separada de la principal. PHPUnit apunta a ella
-automáticamente mediante la variable `DATABASE_URL` definida en `phpunit.dist.xml`.
+La BD de test está separada de la principal. PHPUnit apunta a ella automáticamente via `DATABASE_URL` en `phpunit.dist.xml`. Los tests de integración usan `beginTransaction()` / `rollBack()` — la BD nunca se limpia manualmente.
 
-Los tests de integración usan `beginTransaction()` / `rollBack()` — nunca se limpia
-la BD manualmente entre tests.
+---
+
+## Arquitectura
+
+**DDD + Arquitectura Hexagonal.** El Bounded Context es la unidad de primer nivel.
+
+```
+Domain ← Application ← Infrastructure
+```
+
+- **Domain**: entidades, Value Objects, Domain Events, interfaces de repositorio. Sin dependencias externas.
+- **Application**: Application Services que orquestan casos de uso. Reciben Commands, devuelven DTOs.
+- **Infrastructure**: controllers HTTP, repositorios Doctrine, mapeos XML. La única capa que conoce Symfony y Doctrine.
+
+### Decisiones de diseño
+
+**Entidades almacenan primitivos.** Las entidades guardan strings e ints internamente; los accessors devuelven Value Objects. Esto evita custom DBAL types y embeddables innecesarios. Doctrine hidrata via reflexión sin necesidad de configuración extra.
+
+**Commands para toda entrada a Application.** Tanto escritura (`CreateUserCommand`) como lectura (`GetUserCommand`) pasan por un Command, aunque tenga un solo campo. Garantiza que nunca llegan primitivos sueltos a la capa de aplicación.
+
+**DTOs para toda salida de Application.** Los services devuelven DTOs, nunca entidades de dominio. El controller serializa el DTO directamente, sin acceder al dominio.
+
+**Rutas con `#[Route]` en los controllers.** `config/routes.yaml` solo contiene los scanners por BC (`type: attribute`).
+
+**Mapeos Doctrine en XML** en `src/{BC}/Infrastructure/Persistence/Doctrine/Mapping/`. Sin annotations ni attributes en las entidades de dominio.
 
 ---
 
@@ -118,47 +136,98 @@ la BD manualmente entre tests.
 
 ```
 src/
-├── Kernel.php
-└── Shared/
+├── Shared/
+│   ├── Domain/
+│   │   ├── ValueObject/Uuid.php          # Base para todos los IDs
+│   │   └── Event/DomainEvent.php         # Base para todos los Domain Events
+│   └── Infrastructure/
+│       ├── Http/Controller/HealthController.php
+│       └── Persistence/Doctrine/Migrations/
+├── User/
+│   ├── Domain/
+│   │   ├── Entity/User.php
+│   │   ├── ValueObject/               # UserId, Email, UserName, UserStatus
+│   │   ├── Event/UserWasCreated.php
+│   │   ├── Repository/UserRepositoryInterface.php
+│   │   └── Exception/
+│   ├── Application/
+│   │   ├── Command/                   # CreateUserCommand, GetUserCommand
+│   │   ├── DTO/UserDTO.php
+│   │   └── Service/                   # CreateUserService, GetUserService, ListUsersService
+│   └── Infrastructure/
+│       ├── Http/Controller/UserController.php
+│       └── Persistence/Doctrine/
+│           ├── DoctrineUserRepository.php
+│           └── Mapping/               # User.orm.xml (XML, sin annotations)
+└── Product/
+    ├── Domain/
+    │   ├── Entity/Product.php
+    │   ├── ValueObject/               # ProductId, ProductName, Money, Currency
+    │   ├── Event/ProductWasCreated.php
+    │   ├── Repository/ProductRepositoryInterface.php
+    │   └── Exception/
+    ├── Application/
+    │   ├── Command/                   # CreateProductCommand, GetProductCommand
+    │   ├── DTO/ProductDTO.php
+    │   └── Service/                   # CreateProductService, GetProductService, ListProductsService
     └── Infrastructure/
-        ├── Http/
-        │   └── Controller/
-        │       └── HealthController.php
-        └── Persistence/
-            └── Doctrine/
-                └── Migrations/          ← migraciones generadas aquí
-
-config/
-├── bundles.php
-├── routes.yaml
-├── services.yaml
-└── packages/
-    ├── doctrine.yaml                    ← DBAL + ORM
-    ├── doctrine_migrations.yaml         ← ruta de migraciones
-    ├── framework.yaml
-    └── routing.yaml
-
-tests/
-├── Unit/
-├── Integration/                         ← tests contra BD real
-└── Functional/                          ← tests HTTP end-to-end
+        ├── Http/Controller/ProductController.php
+        └── Persistence/Doctrine/
+            ├── DoctrineProductRepository.php
+            └── Mapping/               # Product.orm.xml
 ```
 
 ---
 
-## Añadir un Bounded Context
+## Endpoints
 
-Esta rama es el punto de partida. Para añadir un BC (`User`, `Product`, etc.):
+### Health
 
-1. Crea la estructura de carpetas en `src/{BC}/Domain/`, `Application/`, `Infrastructure/`
-2. Define las entidades con XML mappings en `src/{BC}/Infrastructure/Persistence/Doctrine/`
-3. Registra el mapping en `config/packages/doctrine.yaml`
-4. Registra el repositorio y el controller en `config/services.yaml`
-5. Declara las rutas en `config/routes.yaml`
-6. Genera la migración: `make migration`
-7. Aplica la migración: `make migrate`
+```bash
+GET /health
+# {"status":"ok"}
+```
 
-Ver `sf8/postgresql-example` para un ejemplo completo con User + Product.
+### Users
+
+```bash
+# Crear usuario
+POST /api/users
+Content-Type: application/json
+{"email": "john@example.com", "name": "John"}
+# 201 + Location: /api/users/{id}
+# 422 si el email no es válido
+# 409 si el email ya existe
+
+# Obtener usuario
+GET /api/users/{id}
+# 200 {"id":"...","email":"...","name":"...","status":"active"}
+# 404 si no existe
+
+# Listar usuarios
+GET /api/users
+# 200 [{"id":"...","email":"...","name":"...","status":"active"}, ...]
+```
+
+### Products
+
+```bash
+# Crear producto
+POST /api/products
+Content-Type: application/json
+{"name": "Widget", "price_amount": 999, "price_currency": "EUR"}
+# 201 + Location: /api/products/{id}
+# 422 si el nombre está vacío o el precio es negativo
+
+# Obtener producto
+GET /api/products/{id}
+# 200 {"id":"...","name":"...","price_amount":999,"price_currency":"EUR"}
+# 404 si no existe
+
+# Listar productos
+GET /api/products
+# 200 [{"id":"...","name":"...","price_amount":...,"price_currency":"..."}, ...]
+```
 
 ---
 
@@ -169,6 +238,6 @@ Ver `sf8/postgresql-example` para un ejemplo completo con User + Product.
 | `APP_ENV` | `dev` | Entorno de Symfony |
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
-| `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | Conexión a la BD principal |
+| `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
 
-La BD de test se configura directamente en `phpunit.dist.xml` y apunta a `postgres_test:5432`.
+La BD de test apunta a `postgres_test:5432` y se configura en `phpunit.dist.xml`.
