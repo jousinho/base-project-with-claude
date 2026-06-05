@@ -10,7 +10,7 @@ use App\Product\Domain\ValueObject\Money;
 use App\Product\Domain\ValueObject\ProductId;
 use App\Product\Domain\ValueObject\ProductName;
 
-final class Product
+class Product
 {
     private array $domainEvents = [];
 

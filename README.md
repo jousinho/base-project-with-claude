@@ -1,10 +1,10 @@
-# sf8/postgresql-example — Symfony 8 + PostgreSQL + DDD completo
+# sf7/postgresql-example — Symfony 7 + PostgreSQL + DDD completo
 
 Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal.
 Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para partir de cero sin código de dominio, usa `sf8/postgresql`.
-Para la versión con Symfony 7, usa `sf7/postgresql-example`.
+Para partir de cero sin código de dominio, usa `sf7/postgresql`.
+Para la versión con Symfony 8, usa `sf8/postgresql-example`.
 
 ---
 
@@ -12,17 +12,17 @@ Para la versión con Symfony 7, usa `sf7/postgresql-example`.
 
 | Componente | Versión |
 |---|---|
-| PHP | 8.4 |
-| Symfony | 8.1 |
-| Doctrine ORM | ^3.6 |
-| Doctrine Migrations | ^4.0 |
+| PHP | 8.3 |
+| Symfony | 7.4 LTS |
+| Doctrine ORM | ^3.2 |
+| Doctrine Migrations | ^3.4 |
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
-- `php:8.4-fpm-alpine` — PHP-FPM
-- `php:8.4-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
+- `php:8.3-fpm-alpine` — PHP-FPM
+- `php:8.3-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
 - `postgres:16-alpine` — base de datos principal (puerto 5432)
 - `postgres:16-alpine` — base de datos de test (puerto 5433)
 
@@ -41,7 +41,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf8/postgresql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf7/postgresql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia las variables de entorno

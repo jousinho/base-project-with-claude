@@ -10,7 +10,7 @@ use App\User\Domain\ValueObject\UserId;
 use App\User\Domain\ValueObject\UserName;
 use App\User\Domain\ValueObject\UserStatus;
 
-final class User
+class User
 {
     private array $domainEvents = [];
 
