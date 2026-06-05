@@ -1,10 +1,10 @@
-# sf8/postgresql — Symfony 8 + PostgreSQL
+# sf8/mysql — Symfony 8 + MySQL
 
-Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, PostgreSQL 16.
+Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, MySQL 8.4.
 Sin código de dominio — punto de partida limpio para añadir tus propios Bounded Contexts.
 
-Para ver un ejemplo completo con dominio User + Product y tests, usa `sf8/postgresql-example`.
-Para la versión con Symfony 7, usa `sf7/postgresql`.
+Para ver un ejemplo completo con dominio User + Product y tests, usa `sf8/mysql-example`.
+Para la versión con Symfony 7, usa `sf7/mysql`.
 
 ---
 
@@ -16,15 +16,15 @@ Para la versión con Symfony 7, usa `sf7/postgresql`.
 | Symfony | 8.1 |
 | Doctrine ORM | ^3.3 |
 | Doctrine Migrations | ^3.4 |
-| PostgreSQL | 16 |
+| MySQL | 8.4 |
 | PHPUnit | 11 |
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
 - `php:8.4-fpm-alpine` — PHP-FPM
 - `php:8.4-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
-- `postgres:16-alpine` — base de datos principal (puerto 5432)
-- `postgres:16-alpine` — base de datos de test (puerto 5433)
+- `mysql:8.4` — base de datos principal (puerto 3306)
+- `mysql:8.4` — base de datos de test (puerto 3307)
 
 ---
 
@@ -33,7 +33,7 @@ Para la versión con Symfony 7, usa `sf7/postgresql`.
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) o Docker Engine + Docker Compose v2
 - `make` (en macOS viene con Xcode CLI tools; en Linux: `sudo apt install make`)
 
-No necesitas PHP, Composer ni PostgreSQL instalados localmente.
+No necesitas PHP, Composer ni MySQL instalados localmente.
 
 ---
 
@@ -41,7 +41,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf8/postgresql git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/mysql git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia el fichero de variables de entorno
@@ -91,8 +91,8 @@ make composer cmd="require paquete"   # Ejecuta composer
 
 make migrate       # Aplica migraciones pendientes
 make migration     # Genera una nueva migración a partir del diff de entidades
-make db            # Abre psql en la BD principal
-make db-test       # Abre psql en la BD de test
+make db            # Abre mysql CLI en la BD principal
+make db-test       # Abre mysql CLI en la BD de test
 ```
 
 ---
@@ -106,7 +106,7 @@ make test-integration    # suite Integration (requiere BD de test)
 make test-functional     # suite Functional (requiere BD de test)
 ```
 
-La BD de test (`postgres_test`) está separada de la principal. PHPUnit apunta a ella
+La BD de test (`mysql_test`) está separada de la principal. PHPUnit apunta a ella
 automáticamente mediante la variable `DATABASE_URL` definida en `phpunit.dist.xml`.
 
 Los tests de integración usan `beginTransaction()` / `rollBack()` — nunca se limpia
@@ -158,7 +158,7 @@ Esta rama es el punto de partida. Para añadir un BC (`User`, `Product`, etc.):
 6. Genera la migración: `make migration`
 7. Aplica la migración: `make migrate`
 
-Ver `sf8/postgresql-example` para un ejemplo completo con User + Product.
+Ver `sf8/mysql-example` para un ejemplo completo con User + Product.
 
 ---
 
@@ -169,6 +169,6 @@ Ver `sf8/postgresql-example` para un ejemplo completo con User + Product.
 | `APP_ENV` | `dev` | Entorno de Symfony |
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
-| `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | Conexión a la BD principal |
+| `DATABASE_URL` | `mysql://app:app@mysql:3306/app` | Conexión a la BD principal |
 
-La BD de test se configura directamente en `phpunit.dist.xml` y apunta a `postgres_test:5432`.
+La BD de test se configura directamente en `phpunit.dist.xml` y apunta a `mysql_test:3306`.
