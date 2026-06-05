@@ -49,17 +49,18 @@ sf7/postgresql-example
 sf7/mysql
 sf7/mysql-example
 
-# ─── Messenger standalone (sin BD) ─────────────────────────────────────────
-sf7/messenger-sync
-sf7/messenger-sync-example
-sf7/messenger-rabbitmq
-sf7/messenger-rabbitmq-example
-sf7/messenger-redis
-sf7/messenger-redis-example
+# ─── [DESCARTADO] Messenger standalone (sin BD) ────────────────────────────
+# Decisión: sin persistencia el ejemplo no tiene sentido real (no hay dominio
+# que despachar ni efectos observables). Messenger solo existe en combinación
+# con postgresql o mysql.
+# sf7/messenger-sync             sf7/messenger-sync-example
+# sf7/messenger-rabbitmq         sf7/messenger-rabbitmq-example
+# sf7/messenger-redis            sf7/messenger-redis-example
 
-# ─── JWT ───────────────────────────────────────────────────────────────────
-sf7/jwt
-sf7/jwt-example
+# ─── [DESCARTADO] JWT standalone (sin BD) ───────────────────────────────────
+# Decisión: sin BD no hay usuarios contra los que validar credenciales.
+# JWT solo existe en combinación con postgresql o mysql.
+# sf7/jwt                        sf7/jwt-example
 
 # ─── PostgreSQL + Messenger ────────────────────────────────────────────────
 sf7/postgresql-messenger-sync
@@ -115,13 +116,14 @@ sf7/postgresql-cqrs-example
 sf7/mysql-cqrs
 sf7/mysql-cqrs-example
 
-# Mismas 56 ramas duplicadas con prefijo sf8/
+# Mismas 48 ramas duplicadas con prefijo sf8/
 ```
 
-**Total: 112 ramas** (56 por cada base de Symfony).
+**Total: 96 ramas** (48 por cada base de Symfony).
 
 **Notas:**
-- `messenger-doctrine` nunca aparece como rama standalone — necesita una BD para la cola.
+- Messenger y JWT **siempre** van en combinación con `postgresql` o `mysql`. Las variantes standalone fueron descartadas (ver secciones marcadas como `[DESCARTADO]` arriba).
+- `messenger-doctrine` necesita una BD para persistir la cola — por eso solo existe en combinación con `postgresql` o `mysql`.
 - Las ramas CQRS incluyen Elasticsearch como read model. Solo existen para PostgreSQL y MySQL.
 
 ### Rama por defecto del repositorio
@@ -279,18 +281,19 @@ Mapeos Doctrine via XML (no annotations) en `{BC}/Infrastructure/Persistence/Doc
 
 Paquete base común: `symfony/messenger`.
 
-En todas las variantes: al crear un User o Product, el Domain Event se despacha como
-mensaje. Handler de ejemplo que loguea el evento en monolog.
+Messenger **siempre** aparece en combinación con `postgresql` o `mysql` — no existe como
+rama standalone. Al crear un User, el `UserWasCreated` Domain Event se despacha como
+mensaje; el Product BC tiene un handler que crea un producto por defecto vinculado al
+usuario, demostrando comunicación real inter-BC.
 
 | Rama | Transport | Paquete extra | Docker extra |
 |------|-----------|---------------|-------------|
-| `messenger-sync` | `sync://` | — | Ninguno |
-| `messenger-doctrine` | `doctrine://` | — | Ninguno (usa la BD del BC) |
-| `messenger-rabbitmq` | `amqp://` | `symfony/amqp-messenger` | RabbitMQ (5672 + UI 15672) |
-| `messenger-redis` | `redis://` | `symfony/redis-messenger` | Redis (6379) |
+| `*-messenger-sync` | `sync://` | — | Ninguno |
+| `*-messenger-doctrine` | `doctrine://` | — | Ninguno (usa la BD del BC) |
+| `*-messenger-rabbitmq` | `amqp://` | `symfony/amqp-messenger` | RabbitMQ (5672 + UI 15672) |
+| `*-messenger-redis` | `redis://` | `symfony/redis-messenger` | Redis (6379) |
 
-`messenger-doctrine` solo existe en combinación con `postgresql` o `mysql` (necesita
-una BD para persistir la cola de mensajes).
+`messenger-doctrine` usa la propia BD del proyecto para persistir la cola de mensajes.
 
 ---
 
@@ -354,6 +357,9 @@ framework:
 ---
 
 ### `*/jwt` — Autenticación JWT
+
+JWT **siempre** aparece en combinación con `postgresql` o `mysql` — no existe como rama
+standalone (sin BD no hay usuarios contra los que validar credenciales).
 
 Paquetes adicionales:
 - `lexik/jwt-authentication-bundle`
@@ -521,41 +527,40 @@ En cada fase, el orden es siempre: rama clean → rama example → equivalente e
 4. `sf8/mysql` + `sf8/mysql-example`
 5. Equivalentes en sf7
 
-### Fase 3 — Messenger standalone
+### ~~Fase 3 — Messenger standalone~~ *(descartada)*
 
-6. `sf8/messenger-sync` + `sf8/messenger-sync-example`
-7. `sf8/messenger-rabbitmq` + `sf8/messenger-rabbitmq-example`
-8. `sf8/messenger-redis` + `sf8/messenger-redis-example`
+> Messenger standalone eliminado. Messenger siempre va en combinación con BD.
+> Ver sección "Estructura de ramas" para el razonamiento.
+
+### Fase 3 — PostgreSQL + Messenger
+
+6. Las cuatro variantes de transport (`sync`, `doctrine`, `rabbitmq`, `redis`) + sus `-example`
+7. Equivalentes en sf7
+
+### Fase 4 — MySQL + Messenger
+
+8. Las cuatro variantes + sus `-example`
 9. Equivalentes en sf7
 
-### Fase 4 — PostgreSQL + Messenger
+### Fase 5 — JWT
 
-10. Las cuatro variantes de transport (`sync`, `doctrine`, `rabbitmq`, `redis`) + sus `-example`
+> JWT standalone eliminado. JWT siempre va en combinación con BD.
+
+10. `sf8/postgresql-jwt` + example, `sf8/mysql-jwt` + example
 11. Equivalentes en sf7
 
-### Fase 5 — MySQL + Messenger
+### Fase 6 — Stacks completos (Messenger + JWT)
 
-12. Las cuatro variantes + sus `-example`
-13. Equivalentes en sf7
+12. Las ocho combinaciones postgresql + messenger-* + jwt + sus `-example`
+13. Las ocho combinaciones mysql + messenger-* + jwt + sus `-example`
+14. Equivalentes en sf7
 
-### Fase 6 — JWT
+### Fase 7 — CQRS
 
-14. `sf8/jwt` + `sf8/jwt-example`
-15. `sf8/postgresql-jwt` + example, `sf8/mysql-jwt` + example
-16. Equivalentes en sf7
-
-### Fase 7 — Stacks completos (Messenger + JWT)
-
-17. Las ocho combinaciones postgresql + messenger-* + jwt + sus `-example`
-18. Las ocho combinaciones mysql + messenger-* + jwt + sus `-example`
-19. Equivalentes en sf7
-
-### Fase 8 — CQRS
-
-20. `sf8/postgresql-cqrs` + `sf8/postgresql-cqrs-example`
-21. `sf8/mysql-cqrs` + `sf8/mysql-cqrs-example`
-22. Equivalentes en sf7
-23. Revisión general: README en cada rama documenta stack, endpoints y cómo arrancarlo
+15. `sf8/postgresql-cqrs` + `sf8/postgresql-cqrs-example`
+16. `sf8/mysql-cqrs` + `sf8/mysql-cqrs-example`
+17. Equivalentes en sf7
+18. Revisión general: README en cada rama documenta stack, endpoints y cómo arrancarlo
 
 ---
 
