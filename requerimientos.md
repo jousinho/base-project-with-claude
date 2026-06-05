@@ -252,6 +252,20 @@ GET    /api/products       # Listar productos (paginado)
 - Controllers registrados explícitamente en `services.yaml`
 - Migraciones en `src/Shared/Infrastructure/Persistence/Doctrine/Migrations/`
 
+### `final` en entidades — diferencia entre sf7 y sf8
+
+Las entidades (`User`, `Product`) son **`final` en ramas `sf8`** pero **no en ramas `sf7`**.
+
+**Por qué:** PHP 8.4 introdujo lazy ghost objects nativos, que Doctrine usa para lazy
+loading sin necesidad de herencia. Esto hace que `final` sea compatible con Doctrine ORM 3.x.
+PHP 8.3 no tiene lazy ghost objects, por lo que Doctrine genera proxies extendiendo la
+clase — incompatible con `final`.
+
+**Consecuencia práctica:** en ramas `sf7` las entidades son extensibles por diseño de
+plataforma, no por elección arquitectónica. El resto de clases (`final` en Value Objects,
+Services, Controllers, etc.) no se ven afectadas porque Doctrine nunca genera proxies
+para ellas.
+
 ---
 
 ## Features por rama
@@ -276,6 +290,16 @@ Paquetes adicionales:
 - `doctrine/orm`
 - `doctrine/doctrine-bundle`
 - `doctrine/doctrine-migrations-bundle`
+
+Versiones según base:
+
+| Base | doctrine/orm | doctrine/doctrine-bundle | doctrine/doctrine-migrations-bundle |
+|------|-------------|--------------------------|--------------------------------------|
+| `sf8` | `^3.6` | `^3.2` | `^4.0` |
+| `sf7` | `^3.2` | `^2.13` | `^3.4` |
+
+Las versiones `^3.x` de `doctrine-bundle` y `^4.0` de `doctrine-migrations-bundle`
+requieren PHP `^8.4` — incompatibles con las ramas `sf7` (PHP 8.3).
 
 Ambos contextos (User + Product) completamente implementados con CRUD.
 
