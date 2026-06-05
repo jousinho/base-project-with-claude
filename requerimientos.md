@@ -150,7 +150,9 @@ src/
 │   │   ├── Repository/             # UserRepositoryInterface
 │   │   └── Event/                  # UserWasCreated, UserStatusChanged
 │   ├── Application/
-│   │   └── Service/                # CreateUserService, GetUserService, etc.
+│   │   ├── Command/                # CreateUserCommand, GetUserCommand (toda entrada al service)
+│   │   ├── DTO/                    # UserDTO (toda salida del service hacia infra)
+│   │   └── Service/                # CreateUserService, GetUserService, ListUsersService
 │   └── Infrastructure/
 │       ├── Http/Controller/        # UserController
 │       └── Persistence/Doctrine/   # DoctrineUserRepository + mappings XML
@@ -161,7 +163,9 @@ src/
 │   │   ├── Repository/             # ProductRepositoryInterface
 │   │   └── Event/                  # ProductWasCreated, ProductPriceChanged
 │   ├── Application/
-│   │   └── Service/                # CreateProductService, GetProductService, etc.
+│   │   ├── Command/                # CreateProductCommand, GetProductCommand
+│   │   ├── DTO/                    # ProductDTO
+│   │   └── Service/                # CreateProductService, GetProductService, ListProductsService
 │   └── Infrastructure/
 │       ├── Http/Controller/        # ProductController
 │       └── Persistence/Doctrine/   # DoctrineProductRepository + mappings XML
@@ -184,7 +188,8 @@ BC/Domain ← BC/Application ← BC/Infrastructure
 - `Shared/` solo contiene abstracciones base (interfaces, clases abstractas, Value Objects
   genéricos como UUID). Nunca lógica de negocio de ningún BC.
 - El dominio no importa ningún framework, ORM ni broker.
-- Controllers solo orquestan: reciben request, llaman Application Service, devuelven response.
+- Controllers solo orquestan: reciben request, construyen Command, llaman Application Service, serializan DTO de respuesta.
+- Application Services reciben **Commands** (lectura y escritura) y devuelven **DTOs** — nunca entidades de dominio.
 - Sin lógica de negocio fuera del dominio.
 
 ---
@@ -242,7 +247,8 @@ GET    /api/products       # Listar productos (paginado)
 - Sin docblocks en código no modificado
 - Domain Events con campo `occurredOn: DateTimeImmutable`
 - `config/services.yaml`: bindings explícitos interface → implementación Doctrine
-- `config/routes.yaml`: rutas declaradas por bounded context
+- Rutas declaradas con `#[Route]` directamente en los controllers
+- `config/routes.yaml`: solo scanners por BC (`type: attribute`), sin rutas individuales
 - Controllers registrados explícitamente en `services.yaml`
 - Migraciones en `src/Shared/Infrastructure/Persistence/Doctrine/Migrations/`
 
