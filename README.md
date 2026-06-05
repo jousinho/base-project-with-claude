@@ -1,12 +1,11 @@
-# sf7/main — Symfony 7 · Base mínima
+# sf7/main-example — Symfony 7 · Base mínima con ejemplo DDD
 
-Punto de partida limpio para proyectos Symfony 7 (LTS, soporte hasta Nov 2027).
-No incluye base de datos ni autenticación — solo el framework, Docker listo para arrancar
-y un endpoint de healthcheck funcional.
+Misma infraestructura que `sf7/main` pero con un Bounded Context de ejemplo (`Health`)
+que recorre las tres capas DDD: Domain → Application → Infrastructure.
 
-Si necesitas persistencia, autenticación o mensajería, parte de una rama más completa
-(`sf7/postgresql`, `sf7/postgresql-messenger-rabbitmq-jwt`, etc.).
-Para la versión con Symfony 8, usa `sf8/main`.
+Úsala como referencia para entender dónde va cada pieza antes de añadir BD, Messenger o JWT.
+Para arrancar un proyecto real sin código de ejemplo, parte de `sf7/main`.
+Para la versión con Symfony 8, usa `sf8/main-example`.
 
 ---
 
@@ -46,7 +45,7 @@ No necesitas PHP ni Composer instalados localmente — todo corre dentro de Dock
 
 ```bash
 # 1. Clona la rama
-git clone -b sf7/main git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf7/main-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia el fichero de variables de entorno
@@ -63,7 +62,7 @@ make composer cmd=install
 
 # 6. Comprueba que todo funciona
 curl http://localhost:8080/health
-# Respuesta esperada: {"status":"ok"}
+# Respuesta esperada: {"status":"ok","timestamp":"2026-06-05T10:00:00+00:00"}
 ```
 
 O en un solo paso con el script de setup:
@@ -93,60 +92,116 @@ make composer cmd="require paquete"   # Ejecuta composer dentro del contenedor
 
 ## Tests
 
-Esta rama solo tiene tests unitarios (no hay base de datos que integrar).
-
 ```bash
 make test          # todos los tests
 make test-unit     # solo la suite Unit
 ```
 
-Los tests están en `tests/Unit/` y siguen la nomenclatura:
+---
+
+## Arquitectura DDD — cómo está organizado el código
+
+Todas las ramas de este repositorio siguen **DDD + Arquitectura Hexagonal**.
+El **Bounded Context (BC)** es la unidad de primer nivel: cada funcionalidad de negocio
+vive en su propio BC, completamente aislada del resto.
+
+### Regla de dependencia
 
 ```
-test_{acción}_{contexto}__should_{resultado_esperado}
-test_{acción}_{contexto}__when_{condición}__should_{resultado_esperado}
+Domain ← Application ← Infrastructure
 ```
+
+- **Domain** no importa nada de fuera (ni Symfony, ni Doctrine, ni ningún framework).
+- **Application** solo importa clases de su propio Domain.
+- **Infrastructure** (controllers, repositorios, adaptadores) importa Application y Domain,
+  y es la única capa que puede usar frameworks y librerías externas.
+
+Un BC **nunca** importa clases de otro BC directamente.
+La comunicación entre BCs va siempre por Domain Events despachados por Messenger
+(presente en ramas con el sufijo `-messenger-*`).
+
+### Estructura de carpetas
+
+```
+src/
+└── {BoundedContext}/
+    ├── Domain/
+    │   ├── Entity/          # Aggregates (constructores privados + factory create())
+    │   ├── ValueObject/     # Objetos inmutables con reglas de negocio
+    │   ├── Repository/      # Interfaces de persistencia (nunca implementaciones)
+    │   └── Event/           # Domain Events (emitidos por los Aggregates)
+    ├── Application/
+    │   └── Service/         # Application Services: orquestan el caso de uso
+    └── Infrastructure/
+        ├── Http/
+        │   └── Controller/  # Controllers HTTP: reciben request, llaman Service, devuelven response
+        └── Persistence/
+            └── Doctrine/    # Implementaciones de los repositorios (presente en ramas con BD)
+```
+
+### El ejemplo de esta rama: BC `Health`
+
+El BC `Health` no tiene persistencia ni reglas de negocio complejas, pero recorre
+las tres capas para ilustrar el patrón:
+
+```
+GET /health
+    │
+    ▼
+HealthController          (Infrastructure/Http/Controller)
+    │  llama a
+    ▼
+GetHealthStatusService    (Application/Service)
+    │  crea
+    ▼
+HealthStatus              (Domain/ValueObject)
+```
+
+**`HealthStatus`** — Value Object del dominio.
+Constructor privado, se instancia con `HealthStatus::create()`.
+Expone `status()` y `checkedAt()` sin prefijo `get`.
+
+**`GetHealthStatusService`** — Application Service.
+No tiene dependencias externas (sin repositorio porque no hay BD).
+En BCs con persistencia, aquí se inyecta el `RepositoryInterface`.
+
+**`HealthController`** — Adaptador HTTP.
+Solo traduce: convierte el `HealthStatus` en un `JsonResponse`.
+No contiene lógica de negocio.
 
 ---
 
-## Estructura de carpetas
+## Estructura de archivos completa
 
 ```
-├── bin/
-│   └── console                  # CLI de Symfony
-├── config/
-│   ├── bundles.php              # Bundles registrados (solo FrameworkBundle)
-│   ├── routes.yaml              # Rutas declaradas explícitamente
-│   ├── services.yaml            # Servicios y controllers registrados explícitamente
-│   └── packages/
-│       ├── framework.yaml       # Config del framework (secret, error handling)
-│       └── routing.yaml         # Router con UTF-8 habilitado
-├── docker/
-│   ├── nginx/default.conf       # Config de nginx (reescritura a index.php)
-│   └── php/symfony.ini          # Config de PHP (opcache, timezone, memory_limit)
-├── public/
-│   └── index.php                # Front controller de Symfony
-├── scripts/
-│   └── setup.sh                 # Primera configuración: build + up + composer install
-├── src/
-│   ├── Kernel.php
-│   └── Shared/
-│       └── Infrastructure/
-│           └── Http/
-│               └── Controller/
-│                   └── HealthController.php
-├── tests/
-│   └── Unit/
-│       └── Shared/
-│           └── Infrastructure/
-│               └── Http/
-│                   └── Controller/
-│                       └── HealthControllerTest.php
-├── .env.example                 # Variables de entorno de ejemplo (sí se commitea)
-├── compose.yaml                 # Definición de servicios Docker
-├── Dockerfile                   # Imagen PHP 8.3-fpm-alpine compartida por fpm y cli
-├── Makefile                     # Atajos para comandos Docker/Symfony
-└── phpunit.dist.xml             # Configuración de PHPUnit (suite Unit)
+src/
+├── Health/
+│   ├── Domain/
+│   │   └── ValueObject/
+│   │       └── HealthStatus.php
+│   ├── Application/
+│   │   └── Service/
+│   │       └── GetHealthStatusService.php
+│   └── Infrastructure/
+│       └── Http/
+│           └── Controller/
+│               └── HealthController.php
+└── Kernel.php
+
+tests/
+└── Unit/
+    └── Health/
+        ├── Domain/ValueObject/HealthStatusTest.php
+        ├── Application/Service/GetHealthStatusServiceTest.php
+        └── Infrastructure/Http/Controller/HealthControllerTest.php
+
+config/
+├── bundles.php
+├── routes.yaml              # health: GET /health → HealthController
+├── services.yaml            # GetHealthStatusService + HealthController registrados explícitamente
+└── packages/
+    ├── framework.yaml
+    └── routing.yaml
 ```
 
 ---
@@ -155,14 +210,15 @@ test_{acción}_{contexto}__when_{condición}__should_{resultado_esperado}
 
 ### `GET /health`
 
-Comprueba que la aplicación está viva. No tiene dependencias externas (sin BD, sin caché externa).
-
 ```bash
 curl http://localhost:8080/health
 ```
 
 ```json
-{"status":"ok"}
+{
+  "status": "ok",
+  "timestamp": "2026-06-05T10:00:00+00:00"
+}
 ```
 
 ---
@@ -180,13 +236,18 @@ curl http://localhost:8080/health
 ## Decisiones de diseño
 
 **Un solo Dockerfile para fpm y cli.** Ambos contenedores usan la misma imagen para garantizar
-paridad de versiones y extensiones PHP. El contenedor `php-cli` simplemente sobreescribe el
-comando a `tail -f /dev/null` en lugar de arrancar FPM.
+paridad de versiones y extensiones PHP. El contenedor `php-cli` sobreescribe el comando a
+`tail -f /dev/null` en lugar de arrancar FPM.
 
 **Sin auto-discovery de servicios.** `config/services.yaml` no usa `resource:` para cargar
-servicios automáticamente. Cada controlador se registra de forma explícita. Esto hace
-que las dependencias sean visibles y evita registrar clases por error.
+servicios automáticamente. Cada servicio y controller se registra de forma explícita.
+Esto hace que las dependencias sean visibles y evita registrar clases por error.
 
-**Rutas en `routes.yaml`, no en atributos.** Las rutas se declaran en `config/routes.yaml`
-para mantener toda la configuración de routing centralizada y visible sin tener que
-navegar por el código.
+**Rutas en `routes.yaml`, no en atributos PHP.** Las rutas se declaran centralizadas en
+`config/routes.yaml` para que toda la configuración de routing esté en un solo lugar,
+sin tener que navegar por el código fuente para encontrar qué URL apunta a qué controller.
+
+**Value Objects con constructor privado.** `HealthStatus` no puede instanciarse con `new`.
+Solo se crea a través de `HealthStatus::create()`. Este patrón garantiza que cualquier
+invariante del objeto (validaciones, valores por defecto) siempre pase por el factory method,
+sin posibilidad de crear objetos en estado inválido.

@@ -4,5 +4,7 @@ services:
         autoconfigure: false
         public: false
 
-    App\Shared\Infrastructure\Http\Controller\HealthController:
+    App\Health\Application\Service\GetHealthStatusService: ~
+
+    App\Health\Infrastructure\Http\Controller\HealthController:
         tags: ['controller.service_arguments']
