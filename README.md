@@ -1,10 +1,10 @@
-# sf8/postgresql-example — Symfony 8 + PostgreSQL + DDD completo
+# sf8/mysql-example — Symfony 8 + MySQL + DDD completo
 
 Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal.
 Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para partir de cero sin código de dominio, usa `sf8/postgresql`.
-Para la versión con Symfony 7, usa `sf7/postgresql-example`.
+Para partir de cero sin código de dominio, usa `sf8/mysql`.
+Para la versión con Symfony 7, usa `sf7/mysql-example`.
 
 ---
 
@@ -16,15 +16,15 @@ Para la versión con Symfony 7, usa `sf7/postgresql-example`.
 | Symfony | 8.1 |
 | Doctrine ORM | ^3.6 |
 | Doctrine Migrations | ^4.0 |
-| PostgreSQL | 16 |
+| MySQL | 8.4 |
 | PHPUnit | 11 |
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
 - `php:8.4-fpm-alpine` — PHP-FPM
 - `php:8.4-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
-- `postgres:16-alpine` — base de datos principal (puerto 5432)
-- `postgres:16-alpine` — base de datos de test (puerto 5433)
+- `mysql:8.4` — base de datos principal (puerto 3306)
+- `mysql:8.4` — base de datos de test (puerto 3307)
 
 ---
 
@@ -33,7 +33,7 @@ Para la versión con Symfony 7, usa `sf7/postgresql-example`.
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) o Docker Engine + Docker Compose v2
 - `make` (en macOS viene con Xcode CLI tools; en Linux: `sudo apt install make`)
 
-No necesitas PHP, Composer ni PostgreSQL instalados localmente.
+No necesitas PHP, Composer ni MySQL instalados localmente.
 
 ---
 
@@ -41,7 +41,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf8/postgresql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/mysql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia las variables de entorno
@@ -87,8 +87,8 @@ make composer cmd="require paquete" # Ejecuta composer
 
 make migrate       # Aplica migraciones pendientes
 make migration     # Genera migración a partir del diff de entidades
-make db            # psql en la BD principal
-make db-test       # psql en la BD de test
+make db            # mysql CLI en la BD principal
+make db-test       # mysql CLI en la BD de test
 ```
 
 ---
@@ -238,6 +238,6 @@ GET /api/products
 | `APP_ENV` | `dev` | Entorno de Symfony |
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
-| `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
+| `DATABASE_URL` | `mysql://app:app@mysql:3306/app` | BD principal |
 
-La BD de test apunta a `postgres_test:5432` y se configura en `phpunit.dist.xml`.
+La BD de test apunta a `mysql_test:3306` y se configura en `phpunit.dist.xml`.

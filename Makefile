@@ -40,10 +40,10 @@ migration:
 	docker compose exec php-cli php bin/console doctrine:migrations:diff
 
 db:
-	docker compose exec postgres psql -U app app
+	docker compose exec mysql mysql -u app -papp app
 
 db-test:
-	docker compose exec postgres_test psql -U app app_test
+	docker compose exec mysql_test mysql -u app -papp app_test
 
 logs:
 	docker compose logs -f
