@@ -4,3 +4,4 @@
 !var/.gitkeep
 /.phpunit.cache/
 /.phpunit.result.cache
+/config/reference.php
