@@ -22,6 +22,9 @@ services:
     build: .
     volumes:
       - .:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - app
     healthcheck:
@@ -36,9 +39,53 @@ services:
     volumes:
       - .:/var/www/html
     command: ["tail", "-f", "/dev/null"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres_test:
+        condition: service_healthy
     networks:
       - app
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app", "-d", "app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  postgres_test:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: app_test
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app", "-d", "app_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 networks:
   app:
     driver: bridge
+
+volumes:
+  postgres_data:

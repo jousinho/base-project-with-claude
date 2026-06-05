@@ -4,11 +4,14 @@ RUN apk add --no-cache \
         icu-dev \
         libzip-dev \
         libsodium-dev \
+        libpq-dev \
     && docker-php-ext-install -j$(nproc) \
         intl \
         zip \
         bcmath \
         sodium \
+        pdo_pgsql \
+        pgsql \
     && docker-php-ext-enable opcache
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

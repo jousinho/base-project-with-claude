@@ -1,4 +1,4 @@
-.PHONY: up down build shell cli console composer test test-unit logs
+.PHONY: up down build shell cli console composer test test-unit test-integration test-functional migrate migration db db-test logs
 
 up:
 	docker compose up -d
@@ -26,6 +26,24 @@ test:
 
 test-unit:
 	docker compose exec php-cli php vendor/bin/phpunit --testsuite Unit
+
+test-integration:
+	docker compose exec php-cli php vendor/bin/phpunit --testsuite Integration
+
+test-functional:
+	docker compose exec php-cli php vendor/bin/phpunit --testsuite Functional
+
+migrate:
+	docker compose exec php-cli php bin/console doctrine:migrations:migrate --no-interaction
+
+migration:
+	docker compose exec php-cli php bin/console doctrine:migrations:diff
+
+db:
+	docker compose exec postgres psql -U app app
+
+db-test:
+	docker compose exec postgres_test psql -U app app_test
 
 logs:
 	docker compose logs -f

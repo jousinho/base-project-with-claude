@@ -1,12 +1,15 @@
 {
-    "name": "symfony-base/sf8-main",
-    "description": "Symfony 8 base project — minimal stack with healthcheck",
+    "name": "symfony-base/sf8-postgresql",
+    "description": "Symfony 8 + PostgreSQL — infraestructura lista, sin código de dominio",
     "type": "project",
     "license": "MIT",
     "require": {
         "php": ">=8.4",
         "ext-ctype": "*",
         "ext-iconv": "*",
+        "doctrine/doctrine-bundle": "^3.2",
+        "doctrine/doctrine-migrations-bundle": "^4.0",
+        "doctrine/orm": "^3.6",
         "symfony/console": "^8.1",
         "symfony/dotenv": "^8.1",
         "symfony/framework-bundle": "^8.1",
