@@ -12,7 +12,7 @@ Si necesitas persistencia, autenticación o mensajería, parte de una rama más 
 
 | Componente | Versión |
 |---|---|
-| PHP | 8.3 |
+| PHP | 8.4 |
 | Symfony | 8.1 |
 | PHPUnit | 11 |
 

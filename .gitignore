@@ -1,5 +1,6 @@
 /.env
 /vendor/
-/var/
+/var/*
+!var/.gitkeep
 /.phpunit.cache/
-/composer.lock
+/.phpunit.result.cache
