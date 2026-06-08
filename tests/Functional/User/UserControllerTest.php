@@ -89,4 +89,21 @@ final class UserControllerTest extends WebTestCase
         $body = json_decode($client->getResponse()->getContent(), true);
         $this->assertIsArray($body);
     }
+
+    public function test_create_user_endpoint__should_trigger_default_product_creation(): void
+    {
+        $client = static::createClient();
+        $client->request('POST', '/api/users',
+            server:  ['CONTENT_TYPE' => 'application/json'],
+            content: json_encode(['email' => 'alice@test.com', 'name' => 'Alice']),
+        );
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $client->request('GET', '/api/products');
+        $products = json_decode($client->getResponse()->getContent(), true);
+
+        $found = array_filter($products, fn(array $p) => str_contains($p['name'], 'Alice'));
+        $this->assertNotEmpty($found, 'Handler should have created a welcome product for Alice');
+    }
 }

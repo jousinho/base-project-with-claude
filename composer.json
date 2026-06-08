@@ -1,6 +1,6 @@
 {
-    "name": "symfony-base/sf8-postgresql",
-    "description": "Symfony 8 + PostgreSQL — infraestructura lista, sin código de dominio",
+    "name": "symfony-base/sf8-postgresql-messenger-sync-example",
+    "description": "Symfony 8 + PostgreSQL + Messenger (sync) — dominio User & Product con DDD y tests",
     "type": "project",
     "license": "MIT",
     "require": {
@@ -13,6 +13,7 @@
         "symfony/console": "^8.1",
         "symfony/dotenv": "^8.1",
         "symfony/framework-bundle": "^8.1",
+        "symfony/messenger": "^8.1",
         "symfony/runtime": "^8.1",
         "symfony/serializer": "^8.1",
         "symfony/uid": "^8.1",
