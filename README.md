@@ -1,10 +1,12 @@
-# sf8/postgresql-example — Symfony 8 + PostgreSQL + DDD completo
+# sf8/postgresql-messenger-doctrine-example — Symfony 8 + PostgreSQL + Messenger (Doctrine transport) + DDD completo
 
-Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal.
+Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal,
+más comunicación inter-BC vía Domain Events sobre Symfony Messenger con transport `doctrine://`
+(cola persistida en BD, procesamiento asíncrono vía worker).
 Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para partir de cero sin código de dominio, usa `sf8/postgresql`.
-Para la versión con Symfony 7, usa `sf7/postgresql-example`.
+Para partir de cero sin código de dominio, usa `sf8/postgresql-messenger-doctrine`.
+Para la versión con Symfony 7, usa `sf7/postgresql-messenger-doctrine-example`.
 
 ---
 
@@ -16,8 +18,11 @@ Para la versión con Symfony 7, usa `sf7/postgresql-example`.
 | Symfony | 8.1 |
 | Doctrine ORM | ^3.6 |
 | Doctrine Migrations | ^4.0 |
+| Symfony Messenger | ^8.1 |
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
+
+**Transport Messenger:** `doctrine://` — los mensajes se persisten en la tabla `messenger_messages` y se procesan de forma asíncrona mediante un worker (`messenger:consume`), sin depender de un broker externo.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
@@ -41,7 +46,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf8/postgresql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/postgresql-messenger-doctrine-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia las variables de entorno
@@ -103,6 +108,33 @@ make test-functional     # solo Functional (BD de test)
 ```
 
 La BD de test está separada de la principal. PHPUnit apunta a ella automáticamente via `DATABASE_URL` en `phpunit.dist.xml`. Los tests de integración usan `beginTransaction()` / `rollBack()` — la BD nunca se limpia manualmente.
+
+---
+
+## Messenger — comunicación inter-BC vía Domain Events
+
+`CreateUserService` despacha los Domain Events del agregado `User` al bus `event.bus` tras persistir:
+
+```php
+foreach ($user->pullDomainEvents() as $event) {
+    $this->eventBus->dispatch($event);
+}
+```
+
+Con el transport `doctrine://`, el `dispatch()` no ejecuta el handler en el momento — serializa el evento (`UserWasCreated`) y lo guarda como una fila en `messenger_messages`. Un worker independiente lo recoge y lo procesa:
+
+```bash
+make console cmd="messenger:consume async -vv"
+```
+
+`UserWasCreatedHandler` (Bounded Context **Product**) está suscrito a `UserWasCreated` y, al consumirlo, crea un producto de bienvenida ("Welcome product for {userName}", 100 EUR). Es un ejemplo deliberadamente simple de comunicación entre BCs sin acoplamiento directo: `User` no conoce `Product`, solo declara que "un usuario fue creado"; `Product` decide reaccionar.
+
+### Cómo testear el flujo asíncrono
+
+`tests/Functional/User/UserControllerTest.php` cubre las dos mitades del flujo, sin mocks y contra la BD de test real:
+
+- `test_create_user_endpoint__should_queue_user_was_created_event` — comprueba que tras el `POST /api/users` queda una fila en `messenger_messages` con el evento serializado
+- `test_consuming_user_was_created_event__should_trigger_default_product_creation` — ejecuta `messenger:consume` programáticamente vía `CommandTester` para procesar el mensaje pendiente, y comprueba que el handler creó el producto de bienvenida
 
 ---
 
@@ -239,5 +271,6 @@ GET /api/products
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
 | `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
+| `MESSENGER_TRANSPORT_DSN` | `doctrine://default?queue_name=async` | Transporte de Messenger — cola persistida en la tabla `messenger_messages` |
 
 La BD de test apunta a `postgres_test:5432` y se configura en `phpunit.dist.xml`.
