@@ -1,10 +1,12 @@
-# sf8/postgresql-example — Symfony 8 + PostgreSQL + DDD completo
+# sf8/postgresql-messenger-sync-example — Symfony 8 + PostgreSQL + Messenger (sync) + DDD completo
 
-Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal.
+Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal,
+más comunicación inter-BC vía Domain Events sobre Symfony Messenger con transport `sync://`
+(el handler se ejecuta de forma síncrona, en el mismo proceso, sin cola externa).
 Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para partir de cero sin código de dominio, usa `sf8/postgresql`.
-Para la versión con Symfony 7, usa `sf7/postgresql-example`.
+Para partir de cero sin código de dominio, usa `sf8/postgresql-messenger-sync`.
+Para la versión con Symfony 7, usa `sf7/postgresql-messenger-sync-example`.
 
 ---
 
@@ -16,8 +18,11 @@ Para la versión con Symfony 7, usa `sf7/postgresql-example`.
 | Symfony | 8.1 |
 | Doctrine ORM | ^3.6 |
 | Doctrine Migrations | ^4.0 |
+| Symfony Messenger | ^8.1 |
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
+
+**Transport Messenger:** `sync://` — los mensajes se procesan en el mismo proceso, sin cola externa ni worker.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
@@ -41,7 +46,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf8/postgresql-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/postgresql-messenger-sync-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia las variables de entorno
@@ -103,6 +108,26 @@ make test-functional     # solo Functional (BD de test)
 ```
 
 La BD de test está separada de la principal. PHPUnit apunta a ella automáticamente via `DATABASE_URL` en `phpunit.dist.xml`. Los tests de integración usan `beginTransaction()` / `rollBack()` — la BD nunca se limpia manualmente.
+
+---
+
+## Messenger — comunicación inter-BC vía Domain Events
+
+`CreateUserService` despacha los Domain Events del agregado `User` al bus `event.bus` tras persistir:
+
+```php
+foreach ($user->pullDomainEvents() as $event) {
+    $this->eventBus->dispatch($event);
+}
+```
+
+Con el transport `sync://`, el `dispatch()` ejecuta el handler inmediatamente, en el mismo proceso y la misma petición HTTP — no hay cola ni worker.
+
+`UserWasCreatedHandler` (Bounded Context **Product**) está suscrito a `UserWasCreated` y, al recibirlo, crea un producto de bienvenida ("Welcome product for {userName}", 100 EUR). Es un ejemplo deliberadamente simple de comunicación entre BCs sin acoplamiento directo: `User` no conoce `Product`, solo declara que "un usuario fue creado"; `Product` decide reaccionar.
+
+`tests/Functional/User/UserControllerTest.php::test_create_user_endpoint__should_trigger_default_product_creation` comprueba el flujo completo end-to-end: crea un usuario por HTTP y verifica que el producto de bienvenida aparece en `GET /api/products` — todo dentro de la misma petición, gracias al procesamiento síncrono.
+
+Para ver el mismo ejemplo con un transport asíncrono (cola persistida en BD + worker), usa `sf8/postgresql-messenger-doctrine-example`.
 
 ---
 
