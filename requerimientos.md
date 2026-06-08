@@ -621,3 +621,15 @@ Antes de considerar una rama terminada:
 - [ ] Sin comentarios innecesarios ni docblocks en código no modificado
 - [ ] `.env.example` presente y actualizado
 - [ ] README de la rama actualizado
+
+---
+
+## Refactors transversales pendientes
+
+Cambios que afectan a todas las ramas y se abordan al final, una vez cerrado el plan de
+fases — para no interferir con el trabajo en curso ni multiplicar el coste de mantener
+ramas en paralelo.
+
+1. **Renombrar `compose.yaml` → `docker-compose.yaml`** en todas las ramas (incluye
+   referencias en `Makefile`, scripts de `scripts/`, READMEs y cualquier comando documentado
+   con `docker compose -f`).
