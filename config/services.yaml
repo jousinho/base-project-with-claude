@@ -34,6 +34,10 @@ services:
     App\Product\Application\Service\GetProductService: ~
     App\Product\Application\Service\ListProductsService: ~
 
+    # ── Product BC — Messenger ────────────────────────────────────────────────
+    App\Product\Application\MessageHandler\UserWasCreatedHandler:
+        tags: [{ name: messenger.message_handler, bus: event.bus }]
+
     # ── Product BC — HTTP ─────────────────────────────────────────────────────
     App\Product\Infrastructure\Http\Controller\ProductController:
         tags: ['controller.service_arguments']
