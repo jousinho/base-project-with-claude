@@ -7,14 +7,14 @@ namespace App\Tests\Functional\User;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Component\Messenger\Bridge\Amqp\Transport\Connection as AmqpConnection;
+use Symfony\Component\Messenger\Bridge\Redis\Transport\Connection as RedisConnection;
 
 final class UserControllerTest extends WebTestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
-        $this->amqpConnection()->purgeQueues();
+        $this->redisConnection()->cleanup();
     }
 
     public function test_create_user_endpoint__should_return_201_with_location_header(): void
@@ -109,7 +109,7 @@ final class UserControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(201);
 
-        $this->assertSame(1, $this->amqpConnection()->countMessagesInQueues(), 'UserWasCreated for Alice should be queued in RabbitMQ');
+        $this->assertSame(1, $this->redisConnection()->getMessageCount(), 'UserWasCreated for Alice should be queued in Redis');
     }
 
     public function test_consuming_user_was_created_event__should_trigger_default_product_creation(): void
@@ -122,7 +122,7 @@ final class UserControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(201);
 
-        $pending = $this->amqpConnection()->countMessagesInQueues();
+        $pending = $this->redisConnection()->getMessageCount();
 
         $consumeCommand = (new Application(static::$kernel))->find('messenger:consume');
         (new CommandTester($consumeCommand))->execute([
@@ -137,8 +137,8 @@ final class UserControllerTest extends WebTestCase
         $this->assertNotEmpty($found, 'Handler should have created a welcome product for Bob');
     }
 
-    private function amqpConnection(): AmqpConnection
+    private function redisConnection(): RedisConnection
     {
-        return AmqpConnection::fromDsn($_ENV['MESSENGER_TRANSPORT_DSN']);
+        return RedisConnection::fromDsn($_ENV['MESSENGER_TRANSPORT_DSN']);
     }
 }
