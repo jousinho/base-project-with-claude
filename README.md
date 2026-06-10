@@ -1,10 +1,10 @@
-# sf8/postgresql-messenger-rabbitmq — Symfony 8 + PostgreSQL + Messenger (RabbitMQ transport)
+# sf8/postgresql-messenger-redis — Symfony 8 + PostgreSQL + Messenger (Redis transport)
 
-Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, PostgreSQL 16, Symfony Messenger con transport `amqp://` sobre RabbitMQ (broker dedicado, procesamiento asíncrono vía worker).
+Infraestructura lista para producción: Symfony 8.1, Doctrine ORM, PostgreSQL 16, Symfony Messenger con transport `redis://` sobre Redis (broker dedicado, procesamiento asíncrono vía worker).
 Sin código de dominio — punto de partida limpio para añadir tus propios Bounded Contexts.
 
-Para ver un ejemplo completo con dominio User + Product y comunicación inter-BC, usa `sf8/postgresql-messenger-rabbitmq-example`.
-Para la versión con Symfony 7, usa `sf7/postgresql-messenger-rabbitmq`.
+Para ver un ejemplo completo con dominio User + Product y comunicación inter-BC, usa `sf8/postgresql-messenger-redis-example`.
+Para la versión con Symfony 7, usa `sf7/postgresql-messenger-redis`.
 
 ---
 
@@ -17,20 +17,20 @@ Para la versión con Symfony 7, usa `sf7/postgresql-messenger-rabbitmq`.
 | Doctrine ORM | ^3.6 |
 | Doctrine Migrations | ^4.0 |
 | Symfony Messenger | ^8.1 |
-| symfony/amqp-messenger | ^8.1 |
+| symfony/redis-messenger | ^8.1 |
 | PostgreSQL | 16 |
-| RabbitMQ | 3 (management) |
+| Redis | alpine |
 | PHPUnit | 11 |
 
-**Transport Messenger:** `amqp://` (paquete `symfony/amqp-messenger`, requiere la extensión PHP `amqp`) — los mensajes se publican en un exchange/cola de RabbitMQ y se procesan de forma asíncrona mediante un worker (`messenger:consume`). A diferencia del transport `doctrine://`, el broker es un servicio dedicado: no añade tablas a la base de datos y soporta mayor throughput y patrones de enrutado más ricos (exchanges, routing keys, colas con prioridad/TTL/dead-lettering).
+**Transport Messenger:** `redis://` (paquete `symfony/redis-messenger`, requiere la extensión PHP `redis`) — los mensajes se publican en un Redis Stream (XADD) y se procesan de forma asíncrona mediante un worker (`messenger:consume`). A diferencia del transport `doctrine://`, el broker es un servicio dedicado: no añade tablas a la base de datos. A diferencia del transport `amqp://`, no requiere un broker complejo — Redis es un proceso único, extremadamente rápido y con soporte nativo de streams desde Redis 5.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
-- `php:8.4-fpm-alpine` — PHP-FPM (con extensión `amqp`)
+- `php:8.4-fpm-alpine` — PHP-FPM (con extensión `redis`)
 - `php:8.4-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
 - `postgres:16-alpine` — base de datos principal (puerto 5432)
 - `postgres:16-alpine` — base de datos de test (puerto 5433)
-- `rabbitmq:3-management-alpine` — broker de mensajería (puerto 5672, panel de gestión en 15672, usuario/clave `app`/`app`)
+- `redis:alpine` — broker de mensajería (puerto 6379)
 
 ---
 
@@ -46,7 +46,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 ## Arrancar el proyecto por primera vez
 
 ```bash
-git clone -b sf8/postgresql-messenger-rabbitmq git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf8/postgresql-messenger-redis git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 cp .env.example .env
 make build
@@ -97,22 +97,32 @@ final class CreateUserService
 }
 ```
 
-Con `amqp://`, el `dispatch()` no ejecuta el handler en el momento — serializa el mensaje y lo publica en una cola de RabbitMQ (Symfony crea automáticamente el exchange y la cola la primera vez que se publica o consume). Un worker independiente lo recoge y lo procesa:
+Con `redis://`, el `dispatch()` no ejecuta el handler en el momento — serializa el mensaje y lo añade al Redis Stream (XADD). Un worker independiente lo recoge y lo procesa:
 
 ```bash
 make console cmd="messenger:consume async -vv"
 ```
 
-El worker abre una conexión persistente con el broker, consume mensajes de la cola, ejecuta el handler y los confirma (`ack`) al terminar — o los rechaza/reencola según la política de reintentos si falla. Esto desacopla el tiempo de respuesta HTTP del procesamiento del evento — útil cuando el handler hace trabajo costoso (enviar emails, llamadas a APIs externas, generar reportes...).
+El worker lee del stream mediante XREADGROUP (consumer groups de Redis), ejecuta el handler y confirma el mensaje (XACK) al terminar — o lo rechaza/reencola según la política de reintentos si falla. Esto desacopla el tiempo de respuesta HTTP del procesamiento del evento.
 
-Para inspeccionar las colas y mensajes en tránsito, el panel de gestión de RabbitMQ está disponible en `http://localhost:15672` (usuario/clave `app`/`app`). También puedes comprobar el estado del transporte desde la consola:
+Para inspeccionar el stream desde redis-cli:
+
+```bash
+# Ver mensajes pendientes en el stream
+docker compose exec redis redis-cli XLEN messages
+
+# Ver contenido del stream
+docker compose exec redis redis-cli XRANGE messages - +
+```
+
+También desde la consola de Symfony:
 
 ```bash
 make console cmd="messenger:setup-transports"
 make console cmd="messenger:stats"
 ```
 
-Ver `sf8/postgresql-messenger-rabbitmq-example` para la integración completa con User y Product, incluyendo cómo testear el flujo asíncrono (verificar el encolado y consumir el mensaje en el propio test).
+Ver `sf8/postgresql-messenger-redis-example` para la integración completa con User y Product, incluyendo cómo testear el flujo asíncrono.
 
 ---
 
@@ -124,4 +134,4 @@ Ver `sf8/postgresql-messenger-rabbitmq-example` para la integración completa co
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
 | `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
-| `MESSENGER_TRANSPORT_DSN` | `amqp://app:app@rabbitmq:5672/%2f/messages` | Transporte de Messenger — cola publicada en el broker RabbitMQ |
+| `MESSENGER_TRANSPORT_DSN` | `redis://redis:6379` | Transporte de Messenger — stream publicado en Redis |
