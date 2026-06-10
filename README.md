@@ -1,10 +1,10 @@
-# sf7/postgresql — Symfony 7 + PostgreSQL
+# sf7/postgresql-messenger-sync — Symfony 7 + PostgreSQL + Messenger (sync)
 
-Infraestructura lista para producción: Symfony 7.4 LTS, Doctrine ORM, PostgreSQL 16.
+Infraestructura lista para producción: Symfony 7.4 LTS, Doctrine ORM, PostgreSQL 16, Symfony Messenger con transport `sync://`.
 Sin código de dominio — punto de partida limpio para añadir tus propios Bounded Contexts.
 
-Para ver un ejemplo completo con dominio User + Product y tests, usa `sf7/postgresql-example`.
-Para la versión con Symfony 8, usa `sf8/postgresql`.
+Para ver un ejemplo completo con dominio User + Product y comunicación inter-BC, usa `sf7/postgresql-messenger-sync-example`.
+Para la versión con Symfony 8, usa `sf8/postgresql-messenger-sync`.
 
 ---
 
@@ -16,8 +16,11 @@ Para la versión con Symfony 8, usa `sf8/postgresql`.
 | Symfony | 7.4 LTS |
 | Doctrine ORM | ^3.2 |
 | Doctrine Migrations | ^3.4 |
+| Symfony Messenger | ^7.4 |
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
+
+**Transport Messenger:** `sync://` — los mensajes se procesan en el mismo proceso, sin cola externa.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
@@ -41,7 +44,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf7/postgresql git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf7/postgresql-messenger-sync git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia el fichero de variables de entorno
@@ -114,6 +117,37 @@ la BD manualmente entre tests.
 
 ---
 
+## Messenger — cómo usar el bus de eventos
+
+El bus `event.bus` está disponible como `MessageBusInterface`. Para usarlo en un Application Service:
+
+```php
+use Symfony\Component\Messenger\MessageBusInterface;
+
+final class CreateUserService
+{
+    public function __construct(
+        private UserRepositoryInterface $repository,
+        private MessageBusInterface $eventBus,
+    ) {}
+
+    public function execute(CreateUserCommand $command): UserDTO
+    {
+        // ... crear y guardar user
+        foreach ($user->pullDomainEvents() as $event) {
+            $this->eventBus->dispatch($event);
+        }
+        return UserDTO::fromUser($user);
+    }
+}
+```
+
+Con `sync://`, el handler se ejecuta inmediatamente en el mismo proceso.
+
+Ver `sf7/postgresql-messenger-sync-example` para la integración completa con User y Product.
+
+---
+
 ## Estructura de carpetas
 
 ```
@@ -136,6 +170,7 @@ config/
     ├── doctrine.yaml                    ← DBAL + ORM
     ├── doctrine_migrations.yaml         ← ruta de migraciones
     ├── framework.yaml
+    ├── messenger.yaml                   ← bus de eventos, transport sync
     └── routing.yaml
 
 tests/
@@ -158,7 +193,7 @@ Esta rama es el punto de partida. Para añadir un BC (`User`, `Product`, etc.):
 6. Genera la migración: `make migration`
 7. Aplica la migración: `make migrate`
 
-Ver `sf7/postgresql-example` para un ejemplo completo con User + Product.
+Ver `sf7/postgresql-messenger-sync-example` para un ejemplo completo con User + Product y comunicación inter-BC vía Domain Events.
 
 ---
 

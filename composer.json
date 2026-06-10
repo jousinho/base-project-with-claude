@@ -1,6 +1,6 @@
 {
-    "name": "symfony-base/sf7-postgresql",
-    "description": "Symfony 7 + PostgreSQL — infraestructura lista, sin código de dominio",
+    "name": "symfony-base/sf7-postgresql-messenger-sync",
+    "description": "Symfony 7 + PostgreSQL + Messenger (sync) — infraestructura lista, sin código de dominio",
     "type": "project",
     "license": "MIT",
     "require": {
@@ -13,6 +13,7 @@
         "symfony/console": "^7.4",
         "symfony/dotenv": "^7.4",
         "symfony/framework-bundle": "^7.4",
+        "symfony/messenger": "^7.4",
         "symfony/runtime": "^7.4",
         "symfony/serializer": "^7.4",
         "symfony/uid": "^7.4",
