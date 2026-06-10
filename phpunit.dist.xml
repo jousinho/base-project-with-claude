@@ -17,6 +17,7 @@
     <php>
         <env name="APP_ENV" value="test"/>
         <env name="DATABASE_URL" value="postgresql://app:app@postgres_test:5432/app_test?serverVersion=16&amp;charset=utf8"/>
+        <env name="MESSENGER_TRANSPORT_DSN" value="doctrine://default?queue_name=async"/>
     </php>
     <source>
         <include>

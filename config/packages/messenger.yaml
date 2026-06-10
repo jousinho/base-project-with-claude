@@ -6,5 +6,5 @@ framework:
                 default_middleware:
                     allow_no_handlers: true
         transports:
-            sync: 'sync://'
+            async: '%env(MESSENGER_TRANSPORT_DSN)%'
         routing: {}
