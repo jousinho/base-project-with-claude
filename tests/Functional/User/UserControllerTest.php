@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional\User;
 
+use Doctrine\DBAL\Connection;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Console\Tester\CommandTester;
 
 final class UserControllerTest extends WebTestCase
 {
@@ -90,7 +93,7 @@ final class UserControllerTest extends WebTestCase
         $this->assertIsArray($body);
     }
 
-    public function test_create_user_endpoint__should_trigger_default_product_creation(): void
+    public function test_create_user_endpoint__should_queue_user_was_created_event(): void
     {
         $client = static::createClient();
         $client->request('POST', '/api/users',
@@ -100,10 +103,38 @@ final class UserControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(201);
 
+        $connection = static::getContainer()->get(Connection::class);
+        $queued     = (int) $connection->fetchOne(
+            "SELECT COUNT(*) FROM messenger_messages WHERE queue_name = 'async' AND body LIKE ?",
+            ['%alice@test.com%'],
+        );
+
+        $this->assertSame(1, $queued, 'UserWasCreated for Alice should be queued in messenger_messages');
+    }
+
+    public function test_consuming_user_was_created_event__should_trigger_default_product_creation(): void
+    {
+        $client = static::createClient();
+        $client->request('POST', '/api/users',
+            server:  ['CONTENT_TYPE' => 'application/json'],
+            content: json_encode(['email' => 'bob@test.com', 'name' => 'Bob']),
+        );
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $connection = static::getContainer()->get(Connection::class);
+        $pending    = (int) $connection->fetchOne("SELECT COUNT(*) FROM messenger_messages WHERE queue_name = 'async'");
+
+        $consumeCommand = (new Application(static::$kernel))->find('messenger:consume');
+        (new CommandTester($consumeCommand))->execute([
+            'receivers' => ['async'],
+            '--limit'   => $pending,
+        ]);
+
         $client->request('GET', '/api/products');
         $products = json_decode($client->getResponse()->getContent(), true);
 
-        $found = array_filter($products, fn(array $p) => str_contains($p['name'], 'Alice'));
-        $this->assertNotEmpty($found, 'Handler should have created a welcome product for Alice');
+        $found = array_filter($products, fn(array $p) => str_contains($p['name'], 'Bob'));
+        $this->assertNotEmpty($found, 'Handler should have created a welcome product for Bob');
     }
 }

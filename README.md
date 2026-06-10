@@ -1,12 +1,12 @@
-# sf7/postgresql-messenger-sync-example — Symfony 7 + PostgreSQL + Messenger (sync) + DDD completo
+# sf7/postgresql-messenger-doctrine-example — Symfony 7 + PostgreSQL + Messenger (Doctrine transport) + DDD completo
 
 Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal,
-más comunicación inter-BC vía Domain Events sobre Symfony Messenger con transport `sync://`
-(el handler se ejecuta de forma síncrona, en el mismo proceso, sin cola externa).
+más comunicación inter-BC vía Domain Events sobre Symfony Messenger con transport `doctrine://`
+(cola persistida en BD, procesamiento asíncrono vía worker).
 Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para partir de cero sin código de dominio, usa `sf7/postgresql-messenger-sync`.
-Para la versión con Symfony 8, usa `sf8/postgresql-messenger-sync-example`.
+Para partir de cero sin código de dominio, usa `sf7/postgresql-messenger-doctrine`.
+Para la versión con Symfony 8, usa `sf8/postgresql-messenger-doctrine-example`.
 
 ---
 
@@ -22,7 +22,7 @@ Para la versión con Symfony 8, usa `sf8/postgresql-messenger-sync-example`.
 | PostgreSQL | 16 |
 | PHPUnit | 11 |
 
-**Transport Messenger:** `sync://` — los mensajes se procesan en el mismo proceso, sin cola externa ni worker.
+**Transport Messenger:** `doctrine://` — los mensajes se persisten en la tabla `messenger_messages` y se procesan de forma asíncrona mediante un worker (`messenger:consume`), sin depender de un broker externo.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
@@ -46,7 +46,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf7/postgresql-messenger-sync-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf7/postgresql-messenger-doctrine-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia las variables de entorno
@@ -121,13 +121,20 @@ foreach ($user->pullDomainEvents() as $event) {
 }
 ```
 
-Con el transport `sync://`, el `dispatch()` ejecuta el handler inmediatamente, en el mismo proceso y la misma petición HTTP — no hay cola ni worker.
+Con el transport `doctrine://`, el `dispatch()` no ejecuta el handler en el momento — serializa el evento (`UserWasCreated`) y lo guarda como una fila en `messenger_messages`. Un worker independiente lo recoge y lo procesa:
 
-`UserWasCreatedHandler` (Bounded Context **Product**) está suscrito a `UserWasCreated` y, al recibirlo, crea un producto de bienvenida ("Welcome product for {userName}", 100 EUR). Es un ejemplo deliberadamente simple de comunicación entre BCs sin acoplamiento directo: `User` no conoce `Product`, solo declara que "un usuario fue creado"; `Product` decide reaccionar.
+```bash
+make console cmd="messenger:consume async -vv"
+```
 
-`tests/Functional/User/UserControllerTest.php::test_create_user_endpoint__should_trigger_default_product_creation` comprueba el flujo completo end-to-end: crea un usuario por HTTP y verifica que el producto de bienvenida aparece en `GET /api/products` — todo dentro de la misma petición, gracias al procesamiento síncrono.
+`UserWasCreatedHandler` (Bounded Context **Product**) está suscrito a `UserWasCreated` y, al consumirlo, crea un producto de bienvenida ("Welcome product for {userName}", 100 EUR). Es un ejemplo deliberadamente simple de comunicación entre BCs sin acoplamiento directo: `User` no conoce `Product`, solo declara que "un usuario fue creado"; `Product` decide reaccionar.
 
-Para ver el mismo ejemplo con un transport asíncrono (cola persistida en BD + worker), usa `sf7/postgresql-messenger-doctrine-example`.
+### Cómo testear el flujo asíncrono
+
+`tests/Functional/User/UserControllerTest.php` cubre las dos mitades del flujo, sin mocks y contra la BD de test real:
+
+- `test_create_user_endpoint__should_queue_user_was_created_event` — comprueba que tras el `POST /api/users` queda una fila en `messenger_messages` con el evento serializado
+- `test_consuming_user_was_created_event__should_trigger_default_product_creation` — ejecuta `messenger:consume` programáticamente vía `CommandTester` para procesar el mensaje pendiente, y comprueba que el handler creó el producto de bienvenida
 
 ---
 
@@ -264,5 +271,6 @@ GET /api/products
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
 | `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
+| `MESSENGER_TRANSPORT_DSN` | `doctrine://default?queue_name=async` | Transporte de Messenger — cola persistida en la tabla `messenger_messages` |
 
 La BD de test apunta a `postgres_test:5432` y se configura en `phpunit.dist.xml`.
