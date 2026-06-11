@@ -143,7 +143,7 @@ test_{acción}_{contexto}__when_{condición}__should_{resultado_esperado}
 │                   └── Controller/
 │                       └── HealthControllerTest.php
 ├── .env.example                 # Variables de entorno de ejemplo (sí se commitea)
-├── compose.yaml                 # Definición de servicios Docker
+├── docker-compose.yaml          # Definición de servicios Docker
 ├── Dockerfile                   # Imagen PHP 8.3-fpm-alpine compartida por fpm y cli
 ├── Makefile                     # Atajos para comandos Docker/Symfony
 └── phpunit.dist.xml             # Configuración de PHPUnit (suite Unit)
