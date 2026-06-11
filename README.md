@@ -1,10 +1,10 @@
-# sf7/postgresql-messenger-doctrine — Symfony 7 + PostgreSQL + Messenger (Doctrine transport)
+# sf7/postgresql-messenger-rabbitmq — Symfony 7 + PostgreSQL + Messenger (RabbitMQ transport)
 
-Infraestructura lista para producción: Symfony 7.4 LTS, Doctrine ORM, PostgreSQL 16, Symfony Messenger con transport `doctrine://` (cola persistida en BD, procesamiento asíncrono vía worker).
+Infraestructura lista para producción: Symfony 7.4 LTS, Doctrine ORM, PostgreSQL 16, Symfony Messenger con transport `amqp://` sobre RabbitMQ (broker dedicado, procesamiento asíncrono vía worker).
 Sin código de dominio — punto de partida limpio para añadir tus propios Bounded Contexts.
 
-Para ver un ejemplo completo con dominio User + Product y comunicación inter-BC, usa `sf7/postgresql-messenger-doctrine-example`.
-Para la versión con Symfony 8, usa `sf8/postgresql-messenger-doctrine`.
+Para ver un ejemplo completo con dominio User + Product y comunicación inter-BC, usa `sf7/postgresql-messenger-rabbitmq-example`.
+Para la versión con Symfony 8, usa `sf8/postgresql-messenger-rabbitmq`.
 
 ---
 
@@ -17,17 +17,20 @@ Para la versión con Symfony 8, usa `sf8/postgresql-messenger-doctrine`.
 | Doctrine ORM | ^3.2 |
 | Doctrine Migrations | ^3.4 |
 | Symfony Messenger | ^7.4 |
+| symfony/amqp-messenger | ^7.4 |
 | PostgreSQL | 16 |
+| RabbitMQ | 3 (management) |
 | PHPUnit | 11 |
 
-**Transport Messenger:** `doctrine://` — los mensajes se persisten en la tabla `messenger_messages` y se procesan de forma asíncrona mediante un worker (`messenger:consume`), sin depender de un broker externo.
+**Transport Messenger:** `amqp://` (paquete `symfony/amqp-messenger`, requiere la extensión PHP `amqp`) — los mensajes se publican en un exchange/cola de RabbitMQ y se procesan de forma asíncrona mediante un worker (`messenger:consume`). A diferencia del transport `doctrine://`, el broker es un servicio dedicado: no añade tablas a la base de datos y soporta mayor throughput y patrones de enrutado más ricos (exchanges, routing keys, colas con prioridad/TTL/dead-lettering).
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
-- `php:8.3-fpm-alpine` — PHP-FPM
+- `php:8.3-fpm-alpine` — PHP-FPM (con extensión `amqp`)
 - `php:8.3-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
 - `postgres:16-alpine` — base de datos principal (puerto 5432)
 - `postgres:16-alpine` — base de datos de test (puerto 5433)
+- `rabbitmq:3-management-alpine` — broker de mensajería (puerto 5672, panel de gestión en 15672, usuario/clave `app`/`app`)
 
 ---
 
@@ -44,7 +47,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf7/postgresql-messenger-doctrine git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf7/postgresql-messenger-rabbitmq git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia el fichero de variables de entorno
@@ -142,15 +145,22 @@ final class CreateUserService
 }
 ```
 
-Con `doctrine://`, el `dispatch()` no ejecuta el handler en el momento — serializa el mensaje y lo guarda como una fila en `messenger_messages`. Un worker independiente lo recoge y lo procesa:
+Con `amqp://`, el `dispatch()` no ejecuta el handler en el momento — serializa el mensaje y lo publica en una cola de RabbitMQ (Symfony crea automáticamente el exchange y la cola la primera vez que se publica o consume). Un worker independiente lo recoge y lo procesa:
 
 ```bash
 make console cmd="messenger:consume async -vv"
 ```
 
-El worker consulta la tabla, bloquea el siguiente mensaje disponible, ejecuta el handler y borra la fila al terminar (o la reprograma si falla, según la política de reintentos). Esto desacopla el tiempo de respuesta HTTP del procesamiento del evento — útil cuando el handler hace trabajo costoso (enviar emails, llamadas a APIs externas, generar reportes...).
+El worker abre una conexión persistente con el broker, consume mensajes de la cola, ejecuta el handler y los confirma (`ack`) al terminar — o los rechaza/reencola según la política de reintentos si falla. Esto desacopla el tiempo de respuesta HTTP del procesamiento del evento — útil cuando el handler hace trabajo costoso (enviar emails, llamadas a APIs externas, generar reportes...).
 
-Ver `sf7/postgresql-messenger-doctrine-example` para la integración completa con User y Product, incluyendo cómo testear el flujo asíncrono (verificar el encolado y consumir el mensaje en el propio test).
+Para inspeccionar las colas y mensajes en tránsito, el panel de gestión de RabbitMQ está disponible en `http://localhost:15672` (usuario/clave `app`/`app`). También puedes comprobar el estado del transporte desde la consola:
+
+```bash
+make console cmd="messenger:setup-transports"
+make console cmd="messenger:stats"
+```
+
+Ver `sf7/postgresql-messenger-rabbitmq-example` para la integración completa con User y Product, incluyendo cómo testear el flujo asíncrono (verificar el encolado y consumir el mensaje en el propio test).
 
 ---
 
@@ -176,7 +186,7 @@ config/
     ├── doctrine.yaml                    ← DBAL + ORM
     ├── doctrine_migrations.yaml         ← ruta de migraciones
     ├── framework.yaml
-    ├── messenger.yaml                   ← bus de eventos, transport doctrine
+    ├── messenger.yaml                   ← bus de eventos, transport amqp (RabbitMQ)
     └── routing.yaml
 
 tests/
@@ -199,7 +209,7 @@ Esta rama es el punto de partida. Para añadir un BC (`User`, `Product`, etc.):
 6. Genera la migración: `make migration`
 7. Aplica la migración: `make migrate`
 
-Ver `sf7/postgresql-messenger-doctrine-example` para un ejemplo completo con User + Product y comunicación inter-BC vía Domain Events.
+Ver `sf7/postgresql-messenger-rabbitmq-example` para un ejemplo completo con User + Product y comunicación inter-BC vía Domain Events.
 
 ---
 
@@ -211,6 +221,6 @@ Ver `sf7/postgresql-messenger-doctrine-example` para un ejemplo completo con Use
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
 | `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | Conexión a la BD principal |
-| `MESSENGER_TRANSPORT_DSN` | `doctrine://default?queue_name=async` | Transporte de Messenger — cola persistida en la tabla `messenger_messages` |
+| `MESSENGER_TRANSPORT_DSN` | `amqp://app:app@rabbitmq:5672/%2f/messages` | Transporte de Messenger — cola publicada en el broker RabbitMQ |
 
 La BD de test se configura directamente en `phpunit.dist.xml` y apunta a `postgres_test:5432`.
