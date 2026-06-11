@@ -1,12 +1,12 @@
-# sf7/postgresql-messenger-rabbitmq-example — Symfony 7 + PostgreSQL + Messenger (RabbitMQ transport) + DDD completo
+# sf7/postgresql-messenger-redis-example — Symfony 7 + PostgreSQL + Messenger (Redis transport) + DDD completo
 
 Ejemplo de referencia con dominio User y Product implementado siguiendo DDD + Arquitectura Hexagonal,
-más comunicación inter-BC vía Domain Events sobre Symfony Messenger con transport `amqp://`
-sobre RabbitMQ (broker dedicado, procesamiento asíncrono vía worker).
+más comunicación inter-BC vía Domain Events sobre Symfony Messenger con transport `redis://`
+sobre Redis (broker dedicado, procesamiento asíncrono vía worker).
 Incluye entidades, Value Objects, Domain Events, Application Services, repositorios Doctrine y tests en los tres niveles.
 
-Para partir de cero sin código de dominio, usa `sf7/postgresql-messenger-rabbitmq`.
-Para la versión con Symfony 8, usa `sf8/postgresql-messenger-rabbitmq-example`.
+Para partir de cero sin código de dominio, usa `sf7/postgresql-messenger-redis`.
+Para la versión con Symfony 8, usa `sf8/postgresql-messenger-redis-example`.
 
 ---
 
@@ -19,20 +19,20 @@ Para la versión con Symfony 8, usa `sf8/postgresql-messenger-rabbitmq-example`.
 | Doctrine ORM | ^3.2 |
 | Doctrine Migrations | ^3.4 |
 | Symfony Messenger | ^7.4 |
-| symfony/amqp-messenger | ^7.4 |
+| symfony/redis-messenger | ^7.4 |
 | PostgreSQL | 16 |
-| RabbitMQ | 3 (management) |
+| Redis | alpine |
 | PHPUnit | 11 |
 
-**Transport Messenger:** `amqp://` (paquete `symfony/amqp-messenger`, requiere la extensión PHP `amqp`) — los mensajes se publican en un exchange/cola de RabbitMQ y se procesan de forma asíncrona mediante un worker (`messenger:consume`). A diferencia del transport `doctrine://`, el broker es un servicio dedicado: no añade tablas a la base de datos y soporta mayor throughput y patrones de enrutado más ricos (exchanges, routing keys, colas con prioridad/TTL/dead-lettering).
+**Transport Messenger:** `redis://` (paquete `symfony/redis-messenger`, requiere la extensión PHP `redis`) — los mensajes se publican en un Redis Stream (XADD) y se procesan de forma asíncrona mediante un worker (`messenger:consume`). A diferencia del transport `doctrine://`, el broker es un servicio dedicado: no añade tablas a la base de datos. A diferencia del transport `amqp://`, no requiere un broker complejo — Redis es un proceso único, extremadamente rápido y con soporte nativo de streams desde Redis 5.
 
 **Docker:**
 - `nginx:alpine` — servidor web (puerto 8080)
-- `php:8.3-fpm-alpine` — PHP-FPM (con extensión `amqp`)
+- `php:8.3-fpm-alpine` — PHP-FPM (con extensión `redis`)
 - `php:8.3-fpm-alpine` (modo CLI) — comandos, composer, tests, migraciones
 - `postgres:16-alpine` — base de datos principal (puerto 5432)
 - `postgres:16-alpine` — base de datos de test (puerto 5433)
-- `rabbitmq:3-management-alpine` — broker de mensajería (puerto 5672, panel de gestión en 15672, usuario/clave `app`/`app`)
+- `redis:alpine` — broker de mensajería (puerto 6379)
 
 ---
 
@@ -49,7 +49,7 @@ No necesitas PHP, Composer ni PostgreSQL instalados localmente.
 
 ```bash
 # 1. Clona la rama
-git clone -b sf7/postgresql-messenger-rabbitmq-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
+git clone -b sf7/postgresql-messenger-redis-example git@github.com:jousinho/base-project-with-claude.git mi-proyecto
 cd mi-proyecto
 
 # 2. Copia las variables de entorno
@@ -124,24 +124,31 @@ foreach ($user->pullDomainEvents() as $event) {
 }
 ```
 
-Con el transport `amqp://`, el `dispatch()` no ejecuta el handler en el momento — serializa el evento (`UserWasCreated`) y lo publica en una cola de RabbitMQ (Symfony crea automáticamente el exchange y la cola la primera vez que se publica o consume). Un worker independiente lo recoge y lo procesa:
+Con el transport `redis://`, el `dispatch()` no ejecuta el handler en el momento — serializa el evento (`UserWasCreated`) y lo añade al Redis Stream (XADD), creando el stream y el consumer group automáticamente la primera vez que se publica o consume. Un worker independiente lo recoge y lo procesa:
 
 ```bash
 make console cmd="messenger:consume async -vv"
 ```
 
+El worker lee del stream mediante XREADGROUP, ejecuta el handler y confirma el mensaje (XACK) al terminar — o lo rechaza/reencola según la política de reintentos si falla.
+
 `UserWasCreatedHandler` (Bounded Context **Product**) está suscrito a `UserWasCreated` y, al consumirlo, crea un producto de bienvenida ("Welcome product for {userName}", 100 EUR). Es un ejemplo deliberadamente simple de comunicación entre BCs sin acoplamiento directo: `User` no conoce `Product`, solo declara que "un usuario fue creado"; `Product` decide reaccionar.
 
-Para inspeccionar las colas y mensajes en tránsito, el panel de gestión de RabbitMQ está disponible en `http://localhost:15672` (usuario/clave `app`/`app`).
+Para inspeccionar el stream desde redis-cli:
+
+```bash
+docker compose exec redis redis-cli XLEN messages
+docker compose exec redis redis-cli XRANGE messages - +
+```
 
 ### Cómo testear el flujo asíncrono
 
 `tests/Functional/User/UserControllerTest.php` cubre las dos mitades del flujo, sin mocks y contra el broker real:
 
-- `test_create_user_endpoint__should_queue_user_was_created_event` — comprueba que tras el `POST /api/users` queda 1 mensaje publicado en la cola de RabbitMQ (consultando el conteo real vía `Symfony\Component\Messenger\Bridge\Amqp\Transport\Connection::countMessagesInQueues()`, construida a partir del DSN configurado)
+- `test_create_user_endpoint__should_queue_user_was_created_event` — comprueba que tras el `POST /api/users` queda 1 mensaje pendiente en el Redis Stream (consultando `Symfony\Component\Messenger\Bridge\Redis\Transport\Connection::getMessageCount()`, construida a partir del DSN configurado)
 - `test_consuming_user_was_created_event__should_trigger_default_product_creation` — ejecuta `messenger:consume` programáticamente vía `CommandTester` para procesar el mensaje pendiente, y comprueba que el handler creó el producto de bienvenida
 
-Como el broker es un servicio externo y persiste estado entre ejecuciones (a diferencia de la BD de test, que se limpia con transacciones), el test purga las colas en `setUp()` antes de cada caso para garantizar aislamiento.
+Como el broker es un servicio externo y persiste estado entre ejecuciones (a diferencia de la BD de test, que se limpia con transacciones), el test limpia el stream (`Connection::cleanup()`) en `setUp()` antes de cada caso para garantizar aislamiento.
 
 ---
 
@@ -278,6 +285,6 @@ GET /api/products
 | `APP_SECRET` | `change_me_please` | Clave secreta — cambiar en producción |
 | `APP_PORT` | `8080` | Puerto local de nginx |
 | `DATABASE_URL` | `postgresql://app:app@postgres:5432/app` | BD principal |
-| `MESSENGER_TRANSPORT_DSN` | `amqp://app:app@rabbitmq:5672/%2f/messages` | Transporte de Messenger — cola publicada en el broker RabbitMQ |
+| `MESSENGER_TRANSPORT_DSN` | `redis://redis:6379` | Transporte de Messenger — stream publicado en Redis |
 
 La BD de test apunta a `postgres_test:5432` y se configura en `phpunit.dist.xml`.
