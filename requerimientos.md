@@ -624,12 +624,12 @@ Antes de considerar una rama terminada:
 
 ---
 
-## Refactors transversales pendientes
+## Refactors transversales
 
 Cambios que afectan a todas las ramas y se abordan al final, una vez cerrado el plan de
 fases — para no interferir con el trabajo en curso ni multiplicar el coste de mantener
 ramas en paralelo.
 
-1. **Renombrar `compose.yaml` → `docker-compose.yaml`** en todas las ramas (incluye
-   referencias en `Makefile`, scripts de `scripts/`, READMEs y cualquier comando documentado
-   con `docker compose -f`).
+1. ~~**Renombrar `compose.yaml` → `docker-compose.yaml`**~~ ✅ hecho (2026-06-11) en las
+   28 ramas existentes (incluye ajuste de README en `sf7/main` y `sf8/main`, única
+   referencia textual encontrada).
