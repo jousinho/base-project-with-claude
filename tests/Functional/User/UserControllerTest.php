@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional\User;
 
-use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Messenger\Bridge\Amqp\Transport\Connection as AmqpConnection;
 
 final class UserControllerTest extends WebTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->amqpConnection()->purgeQueues();
+    }
+
     public function test_create_user_endpoint__should_return_201_with_location_header(): void
     {
         $client = static::createClient();
@@ -103,13 +109,7 @@ final class UserControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(201);
 
-        $connection = static::getContainer()->get(Connection::class);
-        $queued     = (int) $connection->fetchOne(
-            "SELECT COUNT(*) FROM messenger_messages WHERE queue_name = 'async' AND body LIKE ?",
-            ['%alice@test.com%'],
-        );
-
-        $this->assertSame(1, $queued, 'UserWasCreated for Alice should be queued in messenger_messages');
+        $this->assertSame(1, $this->amqpConnection()->countMessagesInQueues(), 'UserWasCreated for Alice should be queued in RabbitMQ');
     }
 
     public function test_consuming_user_was_created_event__should_trigger_default_product_creation(): void
@@ -122,8 +122,7 @@ final class UserControllerTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(201);
 
-        $connection = static::getContainer()->get(Connection::class);
-        $pending    = (int) $connection->fetchOne("SELECT COUNT(*) FROM messenger_messages WHERE queue_name = 'async'");
+        $pending = $this->amqpConnection()->countMessagesInQueues();
 
         $consumeCommand = (new Application(static::$kernel))->find('messenger:consume');
         (new CommandTester($consumeCommand))->execute([
@@ -136,5 +135,10 @@ final class UserControllerTest extends WebTestCase
 
         $found = array_filter($products, fn(array $p) => str_contains($p['name'], 'Bob'));
         $this->assertNotEmpty($found, 'Handler should have created a welcome product for Bob');
+    }
+
+    private function amqpConnection(): AmqpConnection
+    {
+        return AmqpConnection::fromDsn($_ENV['MESSENGER_TRANSPORT_DSN']);
     }
 }
